@@ -1,0 +1,12 @@
+# secrets and local settings
+.env
+
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# created at run time
+data/uploads/
+data/audit.db

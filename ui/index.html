@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IT Support Copilot</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <h1>IT Support Copilot</h1>
+
+    <form id="chat">
+      <input id="question" aria-label="Your question" placeholder="Ask an IT question..." minlength="2" maxlength="3000" required>
+      <button>Ask</button>
+    </form>
+
+    <section id="result" hidden>
+      <p id="answer"></p>
+      <p>Answered from: <strong id="source"></strong></p>
+      <h2>Sources</h2>
+      <ul id="citations"></ul>
+      <h2>Decision path</h2>
+      <ol id="trace"></ol>
+    </section>
+
+    <details>
+      <summary>Add a company document (staff only)</summary>
+      <form id="upload">
+        <input id="key" type="password" aria-label="Admin key" placeholder="Admin key" required>
+        <input id="file" type="file" aria-label="Document" accept=".pdf,.txt,.md,.docx" required>
+        <button>Upload</button>
+        <span id="upload-status" role="status"></span>
+      </form>
+    </details>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

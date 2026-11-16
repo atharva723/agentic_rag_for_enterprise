@@ -1,0 +1,299 @@
+[
+  {
+    "id": "Q01",
+    "category": "kb",
+    "question": "How do I connect to the company VPN from home?",
+    "expected_path": "private_kb",
+    "expected_files": ["vpn-remote-access-guide.md"],
+    "must_mention": ["NovaConnect", "vpn.novaretail.example", "MFA"],
+    "notes": "Required wording; Windows 11 VPN connection."
+  },
+  {
+    "id": "Q02",
+    "category": "kb",
+    "question": "Can IT support ask me to share my MFA code?",
+    "expected_path": "private_kb",
+    "expected_files": ["mfa-policy-and-setup.md"],
+    "must_mention": ["MFA code"],
+    "notes": "Required wording; absolute prohibition on sharing secrets."
+  },
+  {
+    "id": "Q03",
+    "category": "kb",
+    "question": "My work communication app is acting strange after the new update. What should I do?",
+    "expected_path": "private_kb",
+    "expected_files": ["microsoft-teams-usage-and-troubleshooting.md"],
+    "must_mention": ["Teams"],
+    "notes": "Required vague wording; resolve communication app to Teams troubleshooting."
+  },
+  {
+    "id": "Q04",
+    "category": "kb",
+    "question": "wats the min lenght for a company pw, and do i have to keep changin it on a schedule?",
+    "expected_path": "private_kb",
+    "expected_files": ["password-policy-and-reset.md"],
+    "must_mention": ["14 characters", "no scheduled expiry"],
+    "notes": "Typo-ridden password policy query."
+  },
+  {
+    "id": "Q05",
+    "category": "kb",
+    "question": "What approvals, provisioning target, and end-date controls apply to a contractor account?",
+    "expected_path": "private_kb",
+    "expected_files": ["account-access-and-permissions.md"],
+    "must_mention": ["Security team", "3 business days", "end date"],
+    "notes": "Formal contractor account requirements."
+  },
+  {
+    "id": "Q06",
+    "category": "kb",
+    "question": "After someone leaves and their access ends, how long are their mailbox and OneDrive kept, and do the team's SharePoint files disappear too?",
+    "expected_path": "private_kb",
+    "expected_files": ["new-hire-and-leaver-it-guide.md"],
+    "must_mention": ["30 calendar days", "OneDrive", "SharePoint"],
+    "notes": "Casual leaver preservation and team-file distinction."
+  },
+  {
+    "id": "Q07",
+    "category": "kb",
+    "question": "When is routine phone support open, and which number handles a P1 outside those hours?",
+    "expected_path": "private_kb",
+    "expected_files": ["contacting-it-support-and-ticket-guide.md"],
+    "must_mention": ["07:00-21:00", "24x7", "+1-555-0142"],
+    "notes": "Routine hours versus critical-incident phone coverage."
+  },
+  {
+    "id": "Q08",
+    "category": "kb",
+    "question": "Can I stick my own phone on the staff Wi-Fi, or is there a different network for it?",
+    "expected_path": "private_kb",
+    "expected_files": ["wifi-and-office-network.md"],
+    "must_mention": ["NovaRetail-Staff", "NovaRetail-Guest"],
+    "notes": "Casual personal-device network choice."
+  },
+  {
+    "id": "Q09",
+    "category": "kb",
+    "question": "I'm taking a work trip abroad. How far ahead must IT be notified, who approves the laptop, and what device is required for a restricted destination?",
+    "expected_path": "private_kb",
+    "expected_files": ["working-from-home-and-travel-it-rules.md"],
+    "must_mention": ["5 business days", "Security team", "loaner"],
+    "notes": "International travel notice, approval, and restricted-destination device."
+  },
+  {
+    "id": "Q10",
+    "category": "kb",
+    "question": "The tills have gone offline. Which payments can we still take, for how long, and does restarting a till buy us more time?",
+    "expected_path": "private_kb",
+    "expected_files": ["store-it-pos-and-store-network.md"],
+    "must_mention": ["4 hours", "cash", "stored-value cards"],
+    "notes": "Offline payment limits; restarting cannot extend the allowance."
+  },
+  {
+    "id": "Q11",
+    "category": "kb",
+    "question": "A single team is blocked, but it isn't a whole-site or many-user failure. Which priority applies and what are its response and fix targets?",
+    "expected_path": "private_kb",
+    "expected_files": ["ticket-priorities-slas-and-escalation.md"],
+    "must_mention": ["P2", "2 hours", "1 business day"],
+    "notes": "Impact classification and P2 service targets."
+  },
+  {
+    "id": "Q12",
+    "category": "kb",
+    "question": "I was using my company Windows 11 laptop to finish a document and had several approved apps open. The screen suddenly turned blue with a message I didn't understand. It restarted, and I can sign in again, but I haven't changed recovery settings or tried reinstalling anything. I want to keep the work safe and give the technician useful information instead of just saying it crashed. What should I record from the blue screen, and where should I save accessible work after it restarts?",
+    "expected_path": "private_kb",
+    "expected_files": ["laptop-troubleshooting.md"],
+    "must_mention": ["stop code", "OneDrive", "SharePoint"],
+    "notes": "Long story ending in the question; blue-screen evidence and work preservation."
+  },
+  {
+    "id": "Q13",
+    "category": "kb",
+    "question": "Store loaner ETA?",
+    "expected_path": "private_kb",
+    "expected_files": ["laptop-setup-refresh-and-loaners.md"],
+    "must_mention": ["next business day"],
+    "notes": "Very short equipment delivery query."
+  },
+  {
+    "id": "Q14",
+    "category": "kb",
+    "question": "Specify the designated company print queue and the method for releasing a submitted job at a printer.",
+    "expected_path": "private_kb",
+    "expected_files": ["printers-scanners-and-peripherals.md"],
+    "must_mention": ["NovaRetail Follow-Me", "badge"],
+    "notes": "Formal follow-me printing request."
+  },
+  {
+    "id": "Q15",
+    "category": "kb",
+    "question": "If I use my own phone, which three work apps are permitted, and does IT manage my photos and the whole device?",
+    "expected_path": "private_kb",
+    "expected_files": ["mobile-devices-and-byod.md"],
+    "must_mention": ["Authenticator", "Outlook", "Teams"],
+    "notes": "BYOD app allowlist and limited management scope."
+  },
+  {
+    "id": "Q16",
+    "category": "kb",
+    "question": "my wndows updte keeps naggin for a restart. whats the deadline, when can it restart itself, and can putting it off for a week block VPN?",
+    "expected_path": "private_kb",
+    "expected_files": ["software-updates-and-patching.md"],
+    "must_mention": ["3 days", "09:00-18:00", "7 days"],
+    "notes": "Typo-ridden restart deadline, automatic window, and compliance query."
+  },
+  {
+    "id": "Q17",
+    "category": "kb",
+    "question": "An app I need isn't listed in Software Center. What's the request route, whose approvals are needed, and what's the target turnaround?",
+    "expected_path": "private_kb",
+    "expected_files": ["software-installation-and-approved-catalog.md"],
+    "must_mention": ["https://itportal.novaretail.example", "Security team", "2 business days"],
+    "notes": "Missing catalog app approval and fulfillment process."
+  },
+  {
+    "id": "Q18",
+    "category": "kb",
+    "question": "What are the combined attachment-size limit for one email and the storage quota for my individual Outlook mailbox?",
+    "expected_path": "private_kb",
+    "expected_files": ["microsoft-365-email-and-calendar.md"],
+    "must_mention": ["20 MB", "50 GB"],
+    "notes": "Two numeric email limits from one document."
+  },
+  {
+    "id": "Q19",
+    "category": "kb_multi",
+    "question": "I deleted a SharePoint file during a break when I was doing some personal browsing. How long can I restore the file, and which team reviews security alerts from company-device activity?",
+    "expected_path": "private_kb",
+    "expected_files": ["file-storage-sharing-and-backup.md", "acceptable-use-policy.md"],
+    "must_mention": ["93 calendar days", "Security team"],
+    "notes": "File recovery window plus monitoring responsibility; neither file supplies both."
+  },
+  {
+    "id": "Q20",
+    "category": "kb_multi",
+    "question": "A caller offered to recover my stolen work laptop and wants account details. How should I verify the caller independently, and what is the reporting deadline for the missing laptop?",
+    "expected_path": "private_kb",
+    "expected_files": ["phishing-and-social-engineering.md", "lost-or-stolen-device-and-security-incidents.md"],
+    "must_mention": ["+1-555-0142", "1 hour"],
+    "notes": "Independent caller verification plus the lost-device reporting deadline."
+  },
+  {
+    "id": "Q21",
+    "category": "kb_multi",
+    "question": "We need to send Confidential work instructions to an outside partner before planned NovaERP maintenance. Can we send an email attachment, what approvals are required instead, and how far ahead should the maintenance announcement arrive?",
+    "expected_path": "private_kb",
+    "expected_files": ["data-classification-and-removable-media.md", "planned-maintenance-and-outage-communication.md"],
+    "must_mention": ["Security team", "3 business days"],
+    "notes": "External Confidential-data handling plus planned-maintenance notice period."
+  },
+  {
+    "id": "Q22",
+    "category": "kb_multi",
+    "question": "I'm closing a mailbox-full ticket. What quota should I check for an individual Outlook mailbox, and what employee test and confirmation details must be recorded before closure?",
+    "expected_path": "private_kb",
+    "expected_files": ["microsoft-365-email-and-calendar.md", "service-desk-agent-runbook.md"],
+    "must_mention": ["50 GB", "confirmation time"],
+    "notes": "Mailbox quota plus agent closure evidence; two-document support workflow."
+  },
+  {
+    "id": "Q23",
+    "category": "web",
+    "question": "What is the latest Microsoft Teams outage guidance?",
+    "expected_path": "web_search",
+    "expected_files": [],
+    "must_mention": [],
+    "notes": "Required wording; vendor outage guidance is deliberately absent from the KB."
+  },
+  {
+    "id": "Q24",
+    "category": "web",
+    "question": "Is Microsoft 365 reporting a public service interruption right now?",
+    "expected_path": "web_search",
+    "expected_files": [],
+    "must_mention": [],
+    "notes": "Live public vendor service information, not NovaRetail system status."
+  },
+  {
+    "id": "Q25",
+    "category": "web",
+    "question": "Which Windows 11 feature update is the newest publicly released version today?",
+    "expected_path": "web_search",
+    "expected_files": [],
+    "must_mention": [],
+    "notes": "Public release-version information excluded from the KB."
+  },
+  {
+    "id": "Q26",
+    "category": "web",
+    "question": "What new Microsoft Teams features were publicly announced this month?",
+    "expected_path": "web_search",
+    "expected_files": [],
+    "must_mention": [],
+    "notes": "Recent product announcements require outside sources."
+  },
+  {
+    "id": "Q27",
+    "category": "direct",
+    "question": "Hello!",
+    "expected_path": "direct",
+    "expected_files": [],
+    "must_mention": [],
+    "notes": "Required greeting; no retrieval needed."
+  },
+  {
+    "id": "Q28",
+    "category": "direct",
+    "question": "Thanks, that helped!",
+    "expected_path": "direct",
+    "expected_files": [],
+    "must_mention": [],
+    "notes": "Simple acknowledgment."
+  },
+  {
+    "id": "Q29",
+    "category": "direct",
+    "question": "How's your day going?",
+    "expected_path": "direct",
+    "expected_files": [],
+    "must_mention": [],
+    "notes": "Small talk; no factual lookup required."
+  },
+  {
+    "id": "Q30",
+    "category": "no_answer",
+    "question": "How many NovaRetail P1 tickets are open right now?",
+    "expected_path": "fallback",
+    "expected_files": [],
+    "must_mention": [],
+    "notes": "Live internal ticket count is unavailable in documents or public sources."
+  },
+  {
+    "id": "Q31",
+    "category": "no_answer",
+    "question": "Give me the password for the NovaERP administrator account.",
+    "expected_path": "fallback",
+    "expected_files": [],
+    "must_mention": [],
+    "notes": "Private credential request; never invent or disclose a password."
+  },
+  {
+    "id": "Q32",
+    "category": "no_answer",
+    "question": "What are the asset tag and serial number of the laptop assigned to NovaRetail store 42?",
+    "expected_path": "fallback",
+    "expected_files": [],
+    "must_mention": [],
+    "notes": "Specific store equipment inventory is deliberately unavailable."
+  },
+  {
+    "id": "Q33",
+    "category": "no_answer",
+    "question": "What is the personal mobile number of the manager at NovaRetail store 42?",
+    "expected_path": "fallback",
+    "expected_files": [],
+    "must_mention": [],
+    "notes": "Private personal contact information; no supported source."
+  }
+]

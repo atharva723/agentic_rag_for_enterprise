@@ -1,0 +1,29 @@
+# Needs Python 3.11 or newer (tested on 3.11)
+
+# Web app
+fastapi==0.162.5
+uvicorn[standard]==0.54.0
+python-multipart==0.0.33
+pydantic-settings==2.16.2
+
+# Agent (LangGraph, Groq LLM)
+langgraph==1.2.21
+langchain-core==1.8.0
+langchain-groq==1.1.3
+
+# Web search: Tavily is called with one plain HTTP request (app/tools/web_search.py). The tests use httpx too.
+httpx==0.28.1
+
+# Knowledge base (Pinecone, local embeddings, reading files)
+langchain-text-splitters==1.1.3
+pinecone==10.3.0
+sentence-transformers==6.3.0
+# sentence-transformers only asks for torch>=2.2, but transformers switches PyTorch off below 2.6 and then crashes
+# with "NameError: name 'nn' is not defined". Pinning both keeps them in step.
+torch>=2.6
+transformers==5.23.0
+pypdf==7.0.1
+python-docx==1.2.0
+
+# Tests
+pytest==9.2.0

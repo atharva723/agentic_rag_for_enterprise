@@ -1,0 +1,11 @@
+.env
+.git
+.venv
+__pycache__
+.pytest_cache
+data/uploads
+data/audit.db
+tests
+docs
+notebooks
+BRD
