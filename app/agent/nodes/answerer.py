@@ -13,6 +13,11 @@ COMPANY_ONLY_NOTICE = "I could not confirm this from the company documents, so t
 LIVE_WORDS = re.compile(r"\b(now|today|current|currently|latest|newest|recent|recently|this (?:week|month|year))\b", re.IGNORECASE)
 STALE_AFTER_DAYS = 7
 
+# The models like to write look-alike characters. They show up as odd gaps, and copying a file name or link from the page breaks.
+LOOK_ALIKES = str.maketrans(
+    {"\u2010": "-", "\u2011": "-", "\u00a0": " ", "\u2009": " ", "\u202f": " ", "\u200b": None}  # hyphens, no-break and thin spaces, zero-width space
+)
+
 
 def _age_warning(question: str, docs: list[Document]) -> str:
     """For a "now" or "latest" question, say so when even the newest page is old. Done in code because the model can be fooled
@@ -35,7 +40,8 @@ def _age_warning(question: str, docs: list[Document]) -> str:
 
 
 def _plain(text: str) -> str:
-    """The chat page shows plain text. Drop the markdown symbols the model sometimes adds anyway."""
+    """The chat page shows plain text. Drop the markdown symbols the model sometimes adds anyway, and make look-alike characters plain."""
+    text = text.translate(LOOK_ALIKES)
     text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
     text = re.sub(r"(?<!\*)\*(?=\S)([^*\n]+?)(?<=\S)\*(?!\*)", r"\1", text)  # *italic*, but not "* bullet" lines
     text = re.sub(r"^#{1,6}\s*", "", text, flags=re.MULTILINE)

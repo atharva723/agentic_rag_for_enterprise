@@ -18,6 +18,7 @@ To add a new source (tickets, HR docs, SQL): add one file here with a `search(qu
 - One search costs 1 credit (the `basic` depth). The free plan gives 1,000 credits a month.
 - The web is only searched when the knowledge base answer is weak, so most questions cost nothing. If the question is rewritten and retried, that is a second search.
 - Each search returns up to `TOP_K` results (default 4), cut to about 1,000 characters each, so the evidence stays small for the LLM.
+- Social media and video sites (YouTube, Facebook, Instagram, TikTok, X/Twitter, Reddit, Pinterest, Quora) are left out of the results (`SKIP_DOMAINS` in `web_search.py`), because they are not reliable IT guidance.
 
 ## What leaves your network
 

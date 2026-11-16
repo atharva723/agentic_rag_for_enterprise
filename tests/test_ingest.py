@@ -3,7 +3,6 @@ from pathlib import Path
 
 import pytest
 from docx import Document as DocxDocument
-from langchain_core.documents import Document
 
 from app.config import get_settings
 from app.rag import ingest, store

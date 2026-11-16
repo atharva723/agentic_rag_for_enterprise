@@ -3,35 +3,66 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f6f8">
   <title>IT Support Copilot</title>
+  <link rel="icon" href="data:,">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <main>
     <h1>IT Support Copilot</h1>
+    <p class="lead">Ask an IT question. Answers come from the company's own IT documents first, and from the web only when those fall short.</p>
 
     <form id="chat">
-      <input id="question" aria-label="Your question" placeholder="Ask an IT question..." minlength="2" maxlength="3000" required>
-      <button>Ask</button>
+      <label for="question" class="sr-only">Your question</label>
+      <input id="question" name="question" autocomplete="off" placeholder="e.g. How do I connect to the VPN from home…" minlength="2" maxlength="3000" required>
+      <button id="ask">Ask</button>
     </form>
+
+    <div class="examples" role="group" aria-label="Example questions">
+      <span>Try:</span>
+      <button type="button" class="example">How do I connect to the company VPN from home?</button>
+      <button type="button" class="example">What is the latest Microsoft Teams outage guidance?</button>
+      <button type="button" class="example">Hello!</button>
+    </div>
+
+    <p id="status" class="sr-only" role="status" aria-live="polite"></p>
 
     <section id="result" hidden>
       <p id="answer"></p>
-      <p>Answered from: <strong id="source"></strong></p>
-      <h2>Sources</h2>
-      <ul id="citations"></ul>
-      <h2>Decision path</h2>
-      <ol id="trace"></ol>
+      <p id="path" hidden>Answered from: <strong id="source"></strong></p>
+      <div id="sources" hidden>
+        <h2>Sources</h2>
+        <ul id="citations"></ul>
+      </div>
+      <details id="trace-box" open hidden>
+        <summary>Decision Path</summary>
+        <ol id="trace"></ol>
+      </details>
     </section>
 
-    <details>
-      <summary>Add a company document (staff only)</summary>
-      <form id="upload">
-        <input id="key" type="password" aria-label="Admin key" placeholder="Admin key" required>
-        <input id="file" type="file" aria-label="Document" accept=".pdf,.txt,.md,.docx" required>
-        <button>Upload</button>
-        <span id="upload-status" role="status"></span>
+    <details id="staff">
+      <summary>Staff Tools</summary>
+      <form id="staff-form">
+        <label for="key">Admin key</label>
+        <input id="key" name="admin-key" type="password" autocomplete="new-password" spellcheck="false" placeholder="Paste the admin key…" required>
+        <label for="file">Document (PDF, TXT, MD or DOCX)</label>
+        <input id="file" name="file" type="file" accept=".pdf,.txt,.md,.docx" required>
+        <div class="actions">
+          <button type="submit">Upload Document</button>
+          <button type="button" id="load-audit">Show Recent Questions</button>
+        </div>
       </form>
+      <p id="staff-status" role="status" aria-live="polite"></p>
+      <div id="audit-box" class="scroll" role="region" aria-label="Recent questions" tabindex="0" hidden>
+        <table>
+          <caption>Recent questions, newest first</caption>
+          <thead>
+            <tr><th scope="col">Time</th><th scope="col">Question</th><th scope="col">Answered from</th></tr>
+          </thead>
+          <tbody id="audit"></tbody>
+        </table>
+      </div>
     </details>
   </main>
   <script src="app.js"></script>

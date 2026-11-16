@@ -1,4 +1,8 @@
 import logging
+import sys
+import threading
+import time
+import types
 
 import pytest
 from langchain_core.documents import Document
@@ -108,3 +112,41 @@ def test_reset_empties_only_our_namespace(pinecone):
 def test_count_reports_the_chunks_in_our_namespace(pinecone):
     store.add_chunks(pieces("a.md", "one", "two", "three"))
     assert store.count() == 3
+
+
+def test_warm_up_prepares_the_model_and_the_index(pinecone, monkeypatch):
+    store.ensure_index()
+    asked = []
+    monkeypatch.setattr(store, "embed", lambda texts, **kw: asked.append(texts) or [[0.0] * DIM])
+    store._index.cache_clear()
+    store.warm_up()
+    assert asked == [["warm up"]]  # the model was used once
+    assert store._index.cache_info().currsize == 1  # and the index is open, so the first question does not open it
+
+
+def test_warm_up_before_the_first_ingest_says_the_index_is_missing(pinecone):
+    with pytest.raises(RuntimeError, match="does not exist"):
+        store.warm_up()
+    assert pinecone.created == []  # warming up never creates an index
+
+
+def test_two_callers_at_once_load_the_embedding_model_only_once(monkeypatch):
+    loaded = []
+
+    class SlowModel:
+        def __init__(self, name):
+            time.sleep(0.2)  # long enough for the second caller to arrive while the first is loading
+            loaded.append(name)
+
+    monkeypatch.setitem(sys.modules, "sentence_transformers", types.SimpleNamespace(SentenceTransformer=SlowModel))
+    store._load_model.cache_clear()
+    try:
+        results = []
+        threads = [threading.Thread(target=lambda: results.append(store._model())) for _ in range(2)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        assert len(loaded) == 1 and results[0] is results[1]
+    finally:
+        store._load_model.cache_clear()

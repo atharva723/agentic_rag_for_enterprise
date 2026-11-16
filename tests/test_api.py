@@ -1,6 +1,9 @@
+import threading
+
 import pytest
 from fastapi.testclient import TestClient
 
+from app import main as app_main
 from app.config import get_settings
 from app.main import app
 
@@ -30,9 +33,36 @@ def test_admin_routes_need_the_right_key():
     assert client.get("/api/audit", headers=ADMIN).json() == []
 
 
-def test_admin_routes_are_off_when_no_key_is_set(monkeypatch):
+def test_admin_routes_are_off_when_no_key_is_set_and_say_so(monkeypatch):
     monkeypatch.setattr(get_settings(), "admin_api_key", "")
-    assert client.get("/api/audit", headers={"X-Admin-Key": ""}).status_code == 401
+    for headers in ({}, {"X-Admin-Key": ""}, {"X-Admin-Key": "anything"}):  # an empty key must never match an empty header
+        res = client.get("/api/audit", headers=headers)
+        assert res.status_code == 403 and "ADMIN_API_KEY" in res.json()["detail"]
+    assert client.post("/api/ingest", files={"file": ("a.md", b"# A")}).status_code == 403
+
+
+def test_the_page_files_are_served_and_always_rechecked_by_the_browser():
+    for path in ("/", "/app.js", "/style.css"):
+        res = client.get(path)
+        assert res.status_code == 200, path
+        assert res.headers["cache-control"] == "no-cache", path  # an updated page must not run an old, cached script
+
+
+def test_start_up_warms_the_knowledge_base_in_the_background(monkeypatch):
+    warmed = threading.Event()
+    monkeypatch.setattr("app.main.store.warm_up", warmed.set)
+    with TestClient(app) as started:  # entering the block runs the start-up steps
+        assert started.get("/api/health").status_code == 200
+        assert warmed.wait(timeout=5)
+
+
+def test_a_warm_up_problem_is_only_a_warning(monkeypatch, caplog):
+    def refuse():
+        raise RuntimeError("no index yet")
+
+    monkeypatch.setattr("app.main.store.warm_up", refuse)
+    app_main.warm_up()  # must not raise
+    assert "Warm-up skipped: no index yet" in caplog.text
 
 
 def test_upload_saves_the_file_and_ingests_it(monkeypatch, tmp_path):

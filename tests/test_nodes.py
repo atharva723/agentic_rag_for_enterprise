@@ -225,6 +225,12 @@ def test_markdown_symbols_are_removed_because_the_chat_page_shows_plain_text(fak
     assert out["answer"] == "Steps\nOpen the NovaConnect client.\n1. Sign in\nSource: the guide (2026).\n* a bullet\n2 * 3 = 6 and 4 * 5 = 20"
 
 
+def test_look_alike_spaces_and_hyphens_are_made_plain_so_names_and_links_can_be_copied(fake_llm):
+    fake_llm.texts = ["Use the pre\u2011installed client at\u202fvpn.novaretail.example\u00a0now.\u200b See vpn\u2011remote\u2011access\u2011guide.md"]
+    out = answerer.generate_answer(state(source_used="private_kb", docs=[kb_doc()]))
+    assert out["answer"] == "Use the pre-installed client at vpn.novaretail.example now. See vpn-remote-access-guide.md"
+
+
 def test_an_empty_model_reply_becomes_a_clear_message(fake_llm):
     fake_llm.texts = ["   "]
     assert "empty reply" in answerer.generate_answer(state(source_used="private_kb", docs=[kb_doc()]))["answer"]

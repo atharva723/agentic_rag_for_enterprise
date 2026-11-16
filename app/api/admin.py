@@ -13,7 +13,9 @@ MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
 def require_admin(x_admin_key: str = Header(default="")) -> None:
     key = get_settings().admin_api_key
-    if not key or not secrets.compare_digest(x_admin_key.encode(), key.encode()):
+    if not key:  # nobody can get in, so say why instead of a misleading "Invalid admin key"
+        raise HTTPException(status_code=403, detail="Staff tools are switched off. Set ADMIN_API_KEY in .env and restart the app.")
+    if not secrets.compare_digest(x_admin_key.encode(), key.encode()):
         raise HTTPException(status_code=401, detail="Invalid admin key")
 
 

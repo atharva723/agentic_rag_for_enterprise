@@ -3,7 +3,7 @@
 The knowledge base: getting documents in, and finding them again.
 
 - `ingest.py` - file to chunks to stored. Reads pdf, txt, md and docx. Each chunk starts with its title and section. Used by the upload API and by the command line.
-- `store.py` - the only file that talks to Pinecone. It also makes the embeddings. Functions: `search`, `add_chunks`, `reset`, `count`.
+- `store.py` - the only file that talks to Pinecone. It also makes the embeddings. Functions: `search`, `add_chunks`, `reset`, `count`, `warm_up`. The app calls `warm_up` in the background when it starts, so the first question does not wait about 20 seconds for PyTorch and the model to load.
 
 Chat only reads from here. Only ingest writes. A file uploaded again replaces its old chunks.
 

@@ -2,6 +2,7 @@
 import hashlib
 import logging
 import re
+import threading
 from functools import lru_cache
 
 from langchain_core.documents import Document
@@ -18,8 +19,17 @@ BATCH = 100  # chunks per upload request
 # ---- embeddings -------------------------------------------------------------
 
 
-@lru_cache
+_loading = threading.Lock()
+
+
 def _model():
+    # The warm-up at start-up and a first question can arrive together. The second waits here instead of loading a second copy.
+    with _loading:
+        return _load_model()
+
+
+@lru_cache
+def _load_model():
     from sentence_transformers import SentenceTransformer  # slow to import, so only when first needed
 
     name = get_settings().embedding_model
@@ -100,6 +110,12 @@ def _has_chunks(index, namespace: str) -> bool:
 
 
 # ---- read and write ---------------------------------------------------------
+
+
+def warm_up() -> None:
+    """Load the embedding model and open the index now, so the first question does not wait for them (about 20 seconds)."""
+    embed(["warm up"])  # the slow part: it imports PyTorch and loads the model
+    _index()
 
 
 def search(query: str, k: int | None = None) -> list[Document]:
