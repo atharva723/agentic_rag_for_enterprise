@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#fbf9f2">
+  <title>Agentic RAG | Knowledge Vault</title>
+  <link rel="icon" href="assets/pixel-bot.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="page">
+  <header class="page-header">
+    <div class="page-header-inner">
+      <div class="page-left">
+        <a class="page-brand" href="index.html">
+          <span class="mark"><span class="ms" aria-hidden="true">auto_awesome_motion</span></span>
+          <span class="names"><strong>Agentic RAG</strong><small>IT Support</small></span>
+        </a>
+        <nav class="page-nav" aria-label="Main">
+          <a href="chat.html">Chat Workspace</a>
+          <a href="vault.html" aria-current="page">Staff &amp; Documents</a>
+          <a href="settings.html">Settings</a>
+        </nav>
+      </div>
+      <div class="page-right">
+        <a class="btn btn-strong" href="chat.html"><span class="ms ms-sm" aria-hidden="true">arrow_back</span><span>Return to Chat</span></a>
+        <span class="divider-v"></span>
+        <a class="avatar" href="settings.html" aria-label="Settings"><img src="assets/astronaut.png" alt=""></a>
+      </div>
+    </div>
+  </header>
+
+  <main class="page-main">
+    <div class="page-title">
+      <div class="copy">
+        <div class="eyebrow">
+          <span class="a">Corpus Management</span><span class="sep">•</span><span class="b" id="doc-summary">0 documents added from this browser</span>
+        </div>
+        <h1>Knowledge Vault</h1>
+        <p>Add IT documents to the company knowledge base. Each file is read, split into sections and indexed, so the assistant can answer from it and cite it.</p>
+      </div>
+      <div class="title-actions">
+        <img class="sticker" src="assets/scholar-laptop.png" alt="">
+        <div class="buttons">
+          <button class="btn" id="key-btn" type="button" title="Enter the staff admin key"><span class="ms ms-sm" aria-hidden="true">key</span><span>Staff Access</span></button>
+          <button class="btn btn-primary" id="header-upload-btn" type="button"><span class="ms ms-base" aria-hidden="true">upload_file</span><span>Upload Document</span></button>
+        </div>
+      </div>
+    </div>
+
+    <section class="panel" aria-labelledby="upload-heading">
+      <div class="dropzone" id="dropzone">
+        <img src="assets/archive-box.png" alt="">
+        <h2 id="upload-heading">Drag and drop your documents here</h2>
+        <p>Supports <b>PDF, DOCX, Markdown (.md) and TXT</b> up to 10 MB per file.</p>
+        <div class="row">
+          <button class="btn btn-strong" id="browse-btn" type="button"><span class="ms ms-base" aria-hidden="true">folder_open</span><span>Browse Local Files</span></button>
+        </div>
+        <input class="sr-only" id="file-input" type="file" accept=".pdf,.txt,.md,.docx" multiple tabindex="-1" aria-label="Choose documents to upload">
+      </div>
+
+      <div class="progress-strip" id="progress-strip" aria-live="polite">
+        <div class="what">
+          <span class="status-dot" id="progress-dot"></span>
+          <div class="truncate" id="progress-text"></div>
+        </div>
+        <div class="ctrl" id="progress-ctrl" hidden>
+          <div class="bar" id="progress-bar"><i style="width: 0%"></i></div>
+          <button class="text-btn danger" id="cancel-btn" type="button" title="Cancel this upload">Cancel</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="inventory" aria-label="Document inventory" style="display: flex; flex-direction: column; gap: 16px;">
+      <div class="toolbar">
+        <div class="search">
+          <span class="ms" aria-hidden="true">search</span>
+          <label for="search" class="sr-only">Search documents</label>
+          <input class="field" id="search" type="search" placeholder="Search documents by name..." autocomplete="off">
+        </div>
+        <div class="filters">
+          <label class="sr-only" for="format-filter">Filter by format</label>
+          <select class="field" id="format-filter">
+            <option value="all">All Formats</option>
+            <option value="pdf">PDF Documents</option>
+            <option value="md">Markdown (.md)</option>
+            <option value="docx">Word (.docx)</option>
+            <option value="txt">Plain Text (.txt)</option>
+          </select>
+          <label class="sr-only" for="status-filter">Filter by status</label>
+          <select class="field" id="status-filter">
+            <option value="all">Status: All</option>
+            <option value="ready">Indexed / Ready</option>
+            <option value="processing">Processing</option>
+            <option value="failed">Failed</option>
+          </select>
+          <button class="btn" id="remove-selected" type="button" aria-disabled="true" title="Removes the selected entries from this list. Documents already in the knowledge base stay there.">
+            <span class="ms ms-sm" aria-hidden="true">playlist_remove</span><span>Remove Selected</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-scroll">
+          <table class="docs">
+            <thead>
+              <tr>
+                <th style="width: 40px"><input type="checkbox" id="select-all" aria-label="Select all documents on this page"></th>
+                <th>Document Name &amp; Details</th>
+                <th>Format</th>
+                <th>Size</th>
+                <th>Date Uploaded</th>
+                <th>Status</th>
+                <th class="right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="doc-rows"></tbody>
+          </table>
+        </div>
+        <div class="empty" id="empty" hidden>
+          <img src="assets/chat-bot.png" alt="">
+          <strong id="empty-title">No documents yet</strong>
+          <span id="empty-text">Upload a PDF, Word, Markdown or text file and it will appear here once it is indexed.</span>
+        </div>
+        <div class="table-foot">
+          <span id="showing"></span>
+          <nav class="pager" id="pager" aria-label="Pagination"></nav>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <dialog class="sheet" id="key-dialog" aria-labelledby="key-title">
+    <div class="bar-title"><span id="key-title">Staff Access</span><button type="button" id="key-close" aria-label="Close"><span class="ms ms-xs" aria-hidden="true">close</span></button></div>
+    <form id="key-form" method="dialog">
+      <p>Uploading documents is limited to staff. Enter the admin key set as <code>ADMIN_API_KEY</code> on the server. It is kept only in this browser tab and is never stored on disk.</p>
+      <label for="key-input">Admin key</label>
+      <input class="field" id="key-input" type="password" autocomplete="new-password" spellcheck="false" placeholder="Paste the admin key..." required>
+      <p class="form-note" id="key-note" role="status"></p>
+      <div class="row">
+        <button class="btn btn-soft" type="button" id="key-forget">Forget Key</button>
+        <button class="btn btn-primary" type="submit">Save Key</button>
+      </div>
+    </form>
+  </dialog>
+
+  <p id="status" class="sr-only" role="status" aria-live="polite"></p>
+  <script src="common.js"></script>
+  <script src="vault.js"></script>
+</body>
+</html>

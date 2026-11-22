@@ -9,7 +9,7 @@ All the Python code. Each sub-folder has one job.
 
 Files here:
 
-- `main.py` - starts the web app. Serves the API and the chat page, and warms up the knowledge base in the background.
+- `main.py` - starts the web app. Serves the API and the web pages, and warms up the knowledge base in the background.
 - `config.py` - reads every setting from `.env`.
 - `audit.py` - saves each question and its decision path to a small SQLite file.
 

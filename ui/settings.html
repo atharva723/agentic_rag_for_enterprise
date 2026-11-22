@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#fbf9f2">
+  <title>Agentic RAG | Settings</title>
+  <link rel="icon" href="assets/pixel-bot.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="page">
+  <header class="page-header">
+    <div class="page-header-inner">
+      <div class="page-left">
+        <a class="page-brand" href="index.html">
+          <span class="mark"><span class="ms" aria-hidden="true">auto_awesome_motion</span></span>
+          <span class="names"><strong>Agentic RAG</strong><small>IT Support</small></span>
+        </a>
+        <nav class="page-nav" aria-label="Main">
+          <a href="chat.html">Chat Workspace</a>
+          <a href="vault.html">Staff &amp; Documents</a>
+          <a href="settings.html" aria-current="page">Settings</a>
+        </nav>
+      </div>
+      <div class="page-right">
+        <a class="btn btn-strong" href="chat.html"><span class="ms ms-sm" aria-hidden="true">arrow_back</span><span>Return to Chat</span></a>
+        <span class="divider-v"></span>
+        <a class="avatar" href="settings.html" aria-label="Settings"><img src="assets/astronaut.png" alt=""></a>
+      </div>
+    </div>
+  </header>
+
+  <main class="page-main">
+    <div class="page-title">
+      <div class="copy">
+        <div class="eyebrow"><span class="a">Workspace</span><span class="sep">•</span><span class="b">Staff tools and service status</span></div>
+        <h1>Settings</h1>
+        <p>Unlock the staff tools, check that the service is running, and review the questions people have asked.</p>
+      </div>
+      <div class="title-actions"><img class="sticker" src="assets/pixel-creature.png" alt=""></div>
+    </div>
+
+    <div class="settings-grid">
+      <section class="panel" aria-labelledby="access-title">
+        <h2 id="access-title">Staff Access</h2>
+        <p>The admin key unlocks document uploads and the question log. It is kept only in this browser tab.</p>
+        <form id="key-form" autocomplete="off">
+          <label for="key">Admin key</label>
+          <input class="field" id="key" type="password" autocomplete="new-password" spellcheck="false" placeholder="Paste the admin key..." required>
+          <div class="row">
+            <button class="btn btn-primary" type="submit">Save &amp; Verify</button>
+            <button class="btn btn-soft" type="button" id="forget">Forget Key</button>
+          </div>
+          <p class="form-note" id="key-note" role="status"></p>
+        </form>
+      </section>
+
+      <section class="panel" aria-labelledby="status-title">
+        <h2 id="status-title">Service Status</h2>
+        <p>A live check from this browser.</p>
+        <dl class="kv">
+          <dt>Service</dt><dd><span class="status-dot busy" id="svc-dot"></span><span id="svc-text">Checking…</span></dd>
+          <dt>Staff tools</dt><dd><span class="status-dot" id="staff-dot"></span><span id="staff-text">Locked</span></dd>
+          <dt>Uploads</dt><dd id="upload-count">0 documents added from this browser</dd>
+          <dt>Chats</dt><dd id="chat-count">0 saved conversations</dd>
+        </dl>
+        <div class="row" style="margin-top: 16px;">
+          <button class="btn" type="button" id="clear-chats"><span class="ms ms-sm" aria-hidden="true">forum</span><span>Clear Chat History</span></button>
+          <button class="btn" type="button" id="clear-uploads"><span class="ms ms-sm" aria-hidden="true">inventory_2</span><span>Clear Upload List</span></button>
+        </div>
+      </section>
+
+      <section class="wide" aria-labelledby="audit-title" style="display: flex; flex-direction: column; gap: 16px;">
+        <div class="toolbar">
+          <div>
+            <h2 class="head" id="audit-title" style="font: 700 20px var(--font-head); margin: 0;">Recent Questions</h2>
+            <p class="muted" id="audit-note" role="status" style="font-size: 13px; color: var(--on-variant);">Unlock staff access to see the last 20 questions and how each was answered.</p>
+          </div>
+          <button class="btn" type="button" id="load-audit"><span class="ms ms-sm" aria-hidden="true">refresh</span><span>Refresh</span></button>
+        </div>
+        <div class="table-card" id="audit-card" hidden>
+          <div class="table-scroll">
+            <table class="audit">
+              <thead><tr><th scope="col">Time</th><th scope="col">Question</th><th scope="col">Answered from</th></tr></thead>
+              <tbody id="audit"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script src="common.js"></script>
+  <script src="settings.js"></script>
+</body>
+</html>

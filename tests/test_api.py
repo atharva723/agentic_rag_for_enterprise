@@ -1,14 +1,16 @@
+import re
 import threading
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app import main as app_main
-from app.config import get_settings
+from app.config import ROOT, get_settings
 from app.main import app
 
 client = TestClient(app)
 ADMIN = {"X-Admin-Key": "secret"}
+LOCAL_LINK = re.compile(r'(?:href|src)="(?!https?:|//|#|data:|mailto:)([^"#?]+)')  # a page, script, style or image next to the page
 
 
 @pytest.fixture(autouse=True)
@@ -46,6 +48,16 @@ def test_the_page_files_are_served_and_always_rechecked_by_the_browser():
         res = client.get(path)
         assert res.status_code == 200, path
         assert res.headers["cache-control"] == "no-cache", path  # an updated page must not run an old, cached script
+
+
+def test_every_page_is_served_and_every_file_the_pages_load_exists():
+    """The pages link to each other and load scripts, styles and images by relative path. One missing file breaks a page."""
+    pages = sorted((ROOT / "ui").glob("*.html"))
+    assert {p.name for p in pages} >= {"index.html", "chat.html", "vault.html", "settings.html"}
+    for page in pages:
+        assert client.get(f"/{page.name}").status_code == 200, page.name
+        for target in LOCAL_LINK.findall(page.read_text(encoding="utf-8")):
+            assert client.get(f"/{target}").status_code == 200, f"{page.name} links to {target}"
 
 
 def test_start_up_warms_the_knowledge_base_in_the_background(monkeypatch):

@@ -26,7 +26,7 @@ Question
 ## Project map
 
 - `app/` - all Python code. Start reading at `app/agent/graph.py`.
-- `ui/` - the chat page (plain HTML, CSS and JavaScript), with the staff tools.
+- `ui/` - the web pages (plain HTML, CSS and JavaScript, no build step): a landing page, the chat, the Knowledge Vault (staff uploads) and Settings (staff key, service status, recent questions).
 - `data/` - the knowledge base documents (`data/kb/`). Uploads and the audit log appear here when the app runs.
 - `tests/` - tests. They need no API keys.
 - `BRD/` - the customer's problem statement (PDF), the architecture picture and the prototype notebook.
@@ -47,8 +47,8 @@ You need Python 3.11 or newer (tested on 3.11).
 5. Check it: `python -m app.rag.store "How do I connect to the VPN from home?"`
 6. Check web search (uses 1 free Tavily credit): `python -m app.tools.web_search "latest Microsoft Teams outage"`
 7. Make a free Groq key at https://console.groq.com and put it in `.env` as `GROQ_API_KEY=...`
-8. `uvicorn app.main:app --reload`, then open http://127.0.0.1:8000 and ask a question. The server is ready at once and loads the embedding model in the background, so a question asked in the first half minute may wait a little.
-9. Staff tools: the **Staff Tools** panel on the page (upload a document, see recent questions) is off until you set `ADMIN_API_KEY` in `.env`. Make a key with `python -c "import secrets; print(secrets.token_urlsafe(32))"`, paste it in `.env`, restart the app, then paste the same key in the panel. Employees never need it.
+8. `uvicorn app.main:app --reload`, then open http://127.0.0.1:8000. That is the landing page: click **Open the Chat** and ask a question. The server is ready at once and loads the embedding model in the background, so a question asked in the first half minute may wait a little.
+9. Staff tools: the **Knowledge Vault** page (`/vault.html`, upload documents) and the **Settings** page (`/settings.html`, check the key and see the recent questions) stay locked until you set `ADMIN_API_KEY` in `.env`. Make a key with `python -c "import secrets; print(secrets.token_urlsafe(32))"`, paste it in `.env`, restart the app, then paste the same key on either page. Employees never need it.
 10. `pytest` (uses no keys and no tokens)
 11. Optional, with the real services: `python -m tests.run_eval` asks a sample of 10 questions and reports the path, the sources and the tokens used (about 30,000 Groq tokens, roughly 8% of one day's free budget)
 
@@ -77,7 +77,9 @@ The keys come from `.env` at run time and are never copied into the image. The i
 ## Troubleshooting
 
 - The page looks old or broken after an update: press Ctrl+F5 once. The server now tells browsers to re-check the page files, but a copy cached earlier can linger.
-- Staff Tools says "switched off": `ADMIN_API_KEY` is empty in `.env`. Set it (step 9 above) and restart the app.
+- The icons show as words (`add_circle`, `folder_open`) and the fonts look plain: the pages load their fonts and icons from Google Fonts, so the browser must be able to reach `fonts.googleapis.com`. Everything still works without it.
+- The Vault or Settings page says "switched off": `ADMIN_API_KEY` is empty in `.env`. Set it (step 9 above) and restart the app.
+- `data/audit.db` is missing: the file is created when the first question is asked, not when the app starts. It is a SQLite file, so it will not open as text. Read it on the Settings page, under Recent Questions.
 - `PyTorch >= 2.6 is required but found 2.5.0`, then `NameError: name 'nn' is not defined`: the embedding library found an old PyTorch. Usually the environment is empty or shares packages with another project. Check which Python runs with `python -c "import sys; print(sys.executable)"` (it must be inside your env), then run `pip install -r requirements.txt` again.
 - Chat says "The AI service is busy or its daily limit is used up": Groq's free limit was reached (8,000 tokens a minute and 200,000 a day, per model). Wait a minute for the per-minute limit. For the daily limit, wait until tomorrow, or point the busy model's setting (`GROQ_MODEL` or `GROQ_FAST_MODEL` in `.env`) at the other `openai/gpt-oss-*` model, which has its own budget. Only those two models give the strict JSON replies the decisions need. See `app/agent/README.md`.
 - Every answer comes from the web, or says it could not confirm anything: the KB is empty or ingest and chat use different index names. Run `python -m app.rag.store` to see how many chunks are stored.
@@ -94,7 +96,7 @@ The keys come from `.env` at run time and are never copied into the image. The i
 
 ## Status
 
-All the MVP parts work: settings, the knowledge base (`app/rag/`), web search (`app/tools/`), the agent (`app/agent/`), the API, the audit log (SQLite, with a viewer in the Staff Tools), the chat page and the tests. `pytest` passes without any key. `python -m tests.run_eval` checks the real thing.
+All the MVP parts work: settings, the knowledge base (`app/rag/`), web search (`app/tools/`), the agent (`app/agent/`), the API, the audit log (SQLite, with a viewer on the Settings page), the web pages and the tests. `pytest` passes without any key. `python -m tests.run_eval` checks the real thing.
 
 Known limits:
 - A question that needs facts from three different documents may only get part of them. The agent then says so, or falls back and says what it could not confirm.
@@ -102,5 +104,7 @@ Known limits:
 - No checker can tell look-alike names apart (a test accepted a page about "NovaERA" for "NovaERP"). That is why the router keeps passwords, tickets, people, stores and equipment questions away from the web. This guard is a model's judgement, not a guarantee: keep the answer prompt's rule that credentials are never written out.
 - The free Groq plan allows about 3,000 tokens per question from the knowledge base and 4,000 to 5,000 with web search, so roughly 60 to 90 questions a day (each model has its own 200,000-token daily limit).
 - The chat page shows plain text. There are no logins: staff use one shared admin key, which travels in a header, so put the app behind HTTPS before real use.
+- Chats and the Vault's upload list are saved in each browser only, so another browser or computer starts empty. The server has no "list documents" or "delete document" call yet: the Vault list is that browser's own upload history, and its Remove button only edits the list. It never deletes anything from the knowledge base. Each question is also answered on its own, so a follow-up does not see earlier answers.
+- The pages load fonts and icons from Google Fonts. On a network that blocks it, icons show as words and the look is plainer. Everything still works.
 - Anyone who can reach the app can ask questions, and each question spends free Groq tokens. There is no rate limit. Keep it inside the company network, or add a limit, before a production rollout.
 - The audit log keeps every question as typed, with no clean-up. Treat it as private, and trim it from time to time.

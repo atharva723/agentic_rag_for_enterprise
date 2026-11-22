@@ -33,7 +33,7 @@ file -> ingest.py: load_file -> chunk -> ingest_file -> store.add_chunks -> Pine
 - The folder is `kb_dir` in `app/config.py` (default: `data/kb/` inside the project).
 - To use another folder once, pass it: `python -m app.rag.ingest some/folder`. To change it for good, set `KB_DIR` in `.env`.
 - Subfolders are read too, so `batch-1/` to `batch-5/` can stay as they are. Only the file name matters: it is the `source` and part of every id. Two files with the same name are refused.
-- Staff uploads from the chat page are saved in `data/uploads/` and go through the same `ingest_file`.
+- Staff uploads from the Knowledge Vault page are saved in `data/uploads/` and go through the same `ingest_file`.
 
 - The **index** is the database (`PINECONE_INDEX_NAME`). Its vector size is fixed when it is created.
 - A **namespace** is a folder inside the index (`PINECONE_NAMESPACE`). The first upload creates it.

@@ -3,68 +3,252 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#f5f6f8">
-  <title>IT Support Copilot</title>
-  <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="style.css">
+  <meta name="theme-color" content="#c9945a">
+  <meta name="description" content="Your IT help desk, on demand. Ask about VPN, passwords, MFA, Wi-Fi or tickets and get answers from your company's own documents, with the source shown.">
+  <title>Agentic RAG | IT Answers Without Guesswork</title>
+  <link rel="icon" href="assets/pixel-bot.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=VT323&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="landing.css">
 </head>
-<body>
-  <main>
-    <h1>IT Support Copilot</h1>
-    <p class="lead">Ask an IT question. Answers come from the company's own IT documents first, and from the web only when those fall short.</p>
+<body class="landing">
+  <!-- Roughness filters for the torn paper edges (used by .tear in landing.css) -->
+  <svg width="0" height="0" style="position: absolute" aria-hidden="true" focusable="false">
+    <defs>
+      <filter id="rip-front" x="-2%" y="-30%" width="104%" height="160%" color-interpolation-filters="sRGB">
+        <feTurbulence type="fractalNoise" baseFrequency="0.007 0.03" numOctaves="3" seed="7" result="big"/>
+        <feDisplacementMap in="SourceGraphic" in2="big" scale="120" xChannelSelector="R" yChannelSelector="G" result="rough"/>
+        <feTurbulence type="fractalNoise" baseFrequency="0.16" numOctaves="2" seed="21" result="fine"/>
+        <feDisplacementMap in="rough" in2="fine" scale="6" xChannelSelector="G" yChannelSelector="R"/>
+      </filter>
+      <filter id="rip-back" x="-2%" y="-30%" width="104%" height="160%" color-interpolation-filters="sRGB">
+        <feTurbulence type="fractalNoise" baseFrequency="0.008 0.032" numOctaves="3" seed="33" result="big"/>
+        <feDisplacementMap in="SourceGraphic" in2="big" scale="130" xChannelSelector="R" yChannelSelector="G" result="rough"/>
+        <feTurbulence type="fractalNoise" baseFrequency="0.2" numOctaves="2" seed="5" result="fine"/>
+        <feDisplacementMap in="rough" in2="fine" scale="7" xChannelSelector="G" yChannelSelector="R"/>
+      </filter>
+    </defs>
+  </svg>
 
-    <form id="chat">
-      <label for="question" class="sr-only">Your question</label>
-      <input id="question" name="question" autocomplete="off" placeholder="e.g. How do I connect to the VPN from home…" minlength="2" maxlength="3000" required>
-      <button id="ask">Ask</button>
-    </form>
-
-    <div class="examples" role="group" aria-label="Example questions">
-      <span>Try:</span>
-      <button type="button" class="example">How do I connect to the company VPN from home?</button>
-      <button type="button" class="example">What is the latest Microsoft Teams outage guidance?</button>
-      <button type="button" class="example">Hello!</button>
-    </div>
-
-    <p id="status" class="sr-only" role="status" aria-live="polite"></p>
-
-    <section id="result" hidden>
-      <p id="answer"></p>
-      <p id="path" hidden>Answered from: <strong id="source"></strong></p>
-      <div id="sources" hidden>
-        <h2>Sources</h2>
-        <ul id="citations"></ul>
+  <div class="l-wrap">
+    <!-- Hero -->
+    <section class="l-section l-hero" id="hero">
+      <div style="text-align: center;">
+        <span class="kicker">Company Knowledge First • Web Only When Needed</span>
       </div>
-      <details id="trace-box" open hidden>
-        <summary>Decision Path</summary>
-        <ol id="trace"></ol>
-      </details>
+      <div class="hero-head">
+        <h1 class="pixel-title"><span class="navy">Answers</span> Without<br>Guesswork</h1>
+        <p>Your IT help desk, on demand. Ask about VPN, passwords, MFA, Wi-Fi or tickets. Answers come from your company's own documents, with the source shown.</p>
+        <div class="hero-cta"><a class="cta-btn yellow" href="chat.html">Open the Chat</a></div>
+        <div class="sticker float-1 s-bot"><img src="assets/pixel-bot.png" alt="Pixel robot"></div>
+      </div>
+
+      <div class="collage">
+        <div class="win" role="img" aria-label="Example of a question being answered from a company document">
+          <div class="win-bar">
+            <span>ask_copilot.exe</span>
+            <div class="lights" aria-hidden="true"><i></i><i></i><i></i></div>
+          </div>
+          <div class="win-body" aria-hidden="true">
+            <div class="row you"><span class="who">You</span><p id="hp-q"></p></div>
+            <ol class="hp-steps" id="hp-steps"></ol>
+            <div class="row ai"><span class="who">Copilot</span>
+              <div>
+                <p id="hp-a"></p>
+                <span class="chip" id="hp-src"></span>
+              </div>
+            </div>
+          </div>
+          <div class="win-foot">
+            <span class="tag">Example</span>
+            <div class="dots-nav" id="hp-dots"></div>
+          </div>
+        </div>
+        <div class="sticker float-2 s-bulb"><img src="assets/lightbulb.png" alt="Idea light bulb"></div>
+        <div class="sticker float-1 s-creature"><img src="assets/pixel-creature.png" alt="Pixel creature with a laptop"></div>
+        <div class="sticker float-3 s-circuit"><img src="assets/circuit-board.png" alt="Green circuit board"></div>
+      </div>
+
+      <ul class="facts">
+        <li><b>Company documents first</b><span>Answers start from your own IT guides.</span></li>
+        <li><b>Sources on every answer</b><span>See exactly which document it came from.</span></li>
+        <li><b>Says so when unsure</b><span>No evidence, no guess. It tells you what it could not confirm.</span></li>
+      </ul>
+      <div class="tear back up" aria-hidden="true"></div>
+      <div class="tear front up" aria-hidden="true"></div>
     </section>
 
-    <details id="staff">
-      <summary>Staff Tools</summary>
-      <form id="staff-form">
-        <label for="key">Admin key</label>
-        <input id="key" name="admin-key" type="password" autocomplete="new-password" spellcheck="false" placeholder="Paste the admin key…" required>
-        <label for="file">Document (PDF, TXT, MD or DOCX)</label>
-        <input id="file" name="file" type="file" accept=".pdf,.txt,.md,.docx" required>
-        <div class="actions">
-          <button type="submit">Upload Document</button>
-          <button type="button" id="load-audit">Show Recent Questions</button>
-        </div>
-      </form>
-      <p id="staff-status" role="status" aria-live="polite"></p>
-      <div id="audit-box" class="scroll" role="region" aria-label="Recent questions" tabindex="0" hidden>
-        <table>
-          <caption>Recent questions, newest first</caption>
-          <thead>
-            <tr><th scope="col">Time</th><th scope="col">Question</th><th scope="col">Answered from</th></tr>
-          </thead>
-          <tbody id="audit"></tbody>
-        </table>
+    <!-- Agent flow -->
+    <section class="l-section l-synth over" id="synthesis">
+      <div class="section-head">
+        <h2 class="pixel-title">A Step-by-Step Agent</h2>
+        <p>Route, search, grade, retry. Then answer.</p>
       </div>
-    </details>
-  </main>
-  <script src="app.js"></script>
+
+      <div class="handheld-wrap">
+        <div class="handheld">
+          <div class="nameplate"><span>• Decision Path Viewer •</span></div>
+          <div class="hh-grid">
+            <div class="hh-side">
+              <button class="round-btn" id="prev-flow" type="button" aria-label="Previous example">▲</button>
+              <div class="hh-gap" aria-hidden="true"></div>
+              <button class="round-btn" id="next-flow" type="button" aria-label="Next example">▼</button>
+            </div>
+            <div class="lcd">
+              <div class="lcd-screen" aria-live="polite">
+                <div>
+                  <div class="lcd-bar"><span id="lcd-status">AGENT_STATUS</span><span class="live">● EXAMPLE</span></div>
+                  <p class="lcd-prompt"><b>$ question:</b> <span id="lcd-question"></span></p>
+                  <div class="lcd-steps" id="lcd-steps"></div>
+                </div>
+                <div class="lcd-result">
+                  <b id="lcd-result-title"></b>
+                  <p id="lcd-result-text"></p>
+                </div>
+              </div>
+              <div class="lcd-foot" id="lcd-foot"></div>
+            </div>
+            <div class="hh-side">
+              <small>Try it</small>
+              <a class="round-btn" href="chat.html" aria-label="Open the chat" title="Open the chat">A</a>
+              <a class="round-btn" href="#vectors" aria-label="Learn how the knowledge base works" title="Learn more">B</a>
+              <small>Learn more</small>
+            </div>
+          </div>
+          <div class="hh-brand">Use ▲ ▼ to see three real paths • Company documents first</div>
+        </div>
+        <div class="sticker float-2 s-bill"><img src="assets/pointing-bill.png" alt="Banknote portrait pointing down at the example"></div>
+        <div class="sticker float-1 s-scholar"><img src="assets/scholar-laptop.png" alt="Marble scholar typing on a laptop"></div>
+        <div class="sticker float-3 s-ghost"><img src="assets/ghost.png" alt="Pixel ghost"></div>
+      </div>
+      <div class="tear back down" aria-hidden="true"></div>
+      <div class="tear front down" aria-hidden="true"></div>
+    </section>
+
+    <!-- Knowledge base -->
+    <section class="l-section l-vectors over" id="vectors">
+      <span class="tetro t1" aria-hidden="true"></span>
+      <span class="tetro t2" aria-hidden="true"></span>
+      <span class="tetro t3" aria-hidden="true"></span>
+      <span class="tetro t4" aria-hidden="true"></span>
+      <div class="section-head">
+        <h2 class="pixel-title">The Company Knowledge Base</h2>
+        <p>Documents in, cited answers out</p>
+      </div>
+
+      <div class="vec-grid">
+        <div class="crt-side">
+          <div class="crt">
+            <div class="crt-top"><span>KNOWLEDGE BASE</span><span>PINECONE</span></div>
+            <div class="crt-glass">
+              <div>
+                <p class="yellow">[ INDEXED_DOCUMENTS ]</p>
+                <p>█ vpn-remote-access-guide.md</p>
+                <p>█ password-policy-and-reset.md</p>
+                <p>█ mfa-policy-and-setup.md</p>
+                <p>█ ticket-priorities-slas-and-escalation.md</p>
+                <p class="mint">&gt; Embedding model: bge-small-en-v1.5</p>
+                <p class="mint">&gt; Best 4 sections returned per search</p>
+              </div>
+              <div class="foot">&gt; Evidence is cut to about 1,500 tokens per prompt.</div>
+            </div>
+            <div class="crt-bezel">
+              <div class="knobs" aria-hidden="true"><i></i><i></i></div>
+              <span>IT Support Copilot</span>
+            </div>
+          </div>
+          <div class="sticker float-2 s-shades"><img src="assets/statue-sunglasses.png" alt="Marble statue with sunglasses reading a book"></div>
+          <div class="bubble">«Every answer lists the documents it came from»</div>
+        </div>
+
+        <div class="copy-side">
+          <div class="card-white">
+            <h3>How Evidence Is Checked</h3>
+            <p>Every question is searched in the company knowledge base first. A grader then decides whether that evidence is good enough. If it is weak and the topic is public, the agent searches the web and says so. If it is still weak, it rewrites the question once and tries again, instead of guessing.</p>
+          </div>
+          <div class="minis" aria-hidden="true">
+            <div class="mini float-1" style="--rot: -6deg;"><img src="assets/brain-mind.png" alt=""></div>
+            <div class="mini float-3" style="--rot: 6deg;"><img src="assets/einstein.png" alt=""></div>
+          </div>
+          <div class="feat-grid">
+            <div class="feats">
+              <div class="feat">
+                <span>01. Company docs first</span>
+                <p>Answers come from your own IT documents before anything else is consulted.</p>
+              </div>
+              <div class="feat">
+                <span>02. Grade, then retry</span>
+                <p>Weak evidence triggers one query rewrite. If it is still weak, the reply says what could not be confirmed.</p>
+              </div>
+            </div>
+            <div class="brick" aria-label="Safety rules">
+              <div class="t">Safety Rules 3 in 1</div>
+              <div class="lcd-mini">
+                <p class="b">PRIVATE Q TO WEB: NO</p>
+                <p class="b">PASSWORDS SHOWN: NO</p>
+                <p class="b">WEB NOTICE: ALWAYS</p>
+                <p style="font-size: 8px; margin-top: 4px;">RULES ENFORCED IN CODE</p>
+              </div>
+              <div class="dots" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flow">
+        <div class="flow-head">
+          <span class="flow-kicker">Behind the scenes</span>
+          <h3 class="pixel-title">How a question travels</h3>
+          <p>Every message takes one of four routes. Pick one and watch the agent decide, step by step.</p>
+        </div>
+        <div class="win flow-win" id="fl-win">
+          <div class="win-bar">
+            <span>request_pipeline.exe</span>
+            <div class="lights" aria-hidden="true"><i></i><i></i><i></i></div>
+          </div>
+          <div class="flow-bar">
+            <div class="flow-tabs" id="fl-tabs" role="group" aria-label="Choose a route"></div>
+            <button class="fl-play" id="fl-play" type="button"></button>
+          </div>
+          <p class="flow-q"><b>$ question:</b> <span id="fl-q"></span></p>
+          <div class="flow-scroll" id="fl-scroll">
+            <svg class="flow-svg" id="fl-svg" viewBox="0 0 1040 390" role="img" aria-label="Map of the agent's decision graph. The caption below explains each step as it happens."></svg>
+          </div>
+          <div class="flow-cap" id="fl-cap">
+            <div class="cap-main">
+              <div class="cap-meta"><span id="fl-step"></span><span class="pips" id="fl-pips"></span></div>
+              <h4 id="fl-title"></h4>
+              <p id="fl-text"></p>
+            </div>
+            <div class="cap-chips">
+              <span class="fl-chip code" id="fl-fn"></span>
+              <span class="fl-chip" id="fl-model"></span>
+            </div>
+          </div>
+          <p class="sr-only" id="fl-sr" role="status"></p>
+        </div>
+      </div>
+
+      <div class="sticker float-2 s-brainmenu"><img src="assets/brain-menu.png" alt="Brain with an Update menu"></div>
+      <div class="tear back down sage" aria-hidden="true"></div>
+      <div class="tear front down sage" aria-hidden="true"></div>
+    </section>
+
+    <!-- Call to action -->
+    <section class="l-cta" id="deploy">
+      <div class="sticker float-1 s-astro"><img src="assets/astronaut.png" alt="Astronaut floating"></div>
+      <h2 class="pixel-title">Ask Your First Question</h2>
+      <p class="lead">Ask about VPN access, passwords, MFA, tickets and more. Every answer shows where it came from.</p>
+      <div class="cta-row">
+        <a class="cta-btn yellow" href="chat.html">Open the Chat</a>
+      </div>
+      <div class="sticker float-2 s-chatbot"><img src="assets/chat-bot.png" alt="Chat robot with a speech bubble"></div>
+      <div class="l-foot">Agentic RAG • IT Support Copilot • <a href="vault.html">IT staff: manage documents</a></div>
+    </section>
+  </div>
+
+  <script src="landing.js"></script>
+  <script src="flow.js"></script>
 </body>
 </html>
