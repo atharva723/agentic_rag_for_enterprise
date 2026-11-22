@@ -28,6 +28,7 @@ Question
 ## Project map
 
 - `app/` - all Python code. Start reading at `app/agent/graph.py`.
+- `supabase/` - the database side of accounts and saved chats (SQL only). Being added in steps: the tables and their privacy rules are ready, sign-in and saved chats come next. Set-up steps are in `supabase/README.md`.
 - `ui/` - the web pages (plain HTML, CSS and JavaScript, no build step): a landing page, the chat, the Knowledge Vault (staff uploads) and Settings (staff key, service status, recent questions).
 - `data/` - the knowledge base documents (`data/kb/`). Uploads and the audit log appear here when the app runs.
 - `tests/` - tests. They need no API keys.
@@ -96,6 +97,7 @@ The keys come from `.env` at run time and are never copied into the image. The i
 - which folder of documents to load: `kb_dir` in `app/config.py` (or pass a folder to the ingest command)
 - a setting: `.env` (the full list is in `app/config.py`)
 - how much of a chat a follow-up remembers: `MEMORY_TURNS` in `.env` (`0` answers every question on its own)
+- the chat tables or their privacy rules: `supabase/schema.sql` (then run it again in the Supabase SQL Editor)
 
 ## Status
 

@@ -10,6 +10,7 @@ Run from the project root with `pytest`. No API keys needed.
 - `test_store.py` - the Pinecone side: replace on re-upload, safe ids, clear errors, never deleting an index, and the warm-up (the embedding model loads only once).
 - `test_web_search.py` - the Tavily side, against a fake Tavily: results become documents, the key stays in a header, and every failure (bad key, limits, no internet, unreadable reply) gives a plain message.
 - `test_nodes.py` - every agent step, and the whole graph on all five paths (KB answer, web answer, rewrite and retry, fallback, small talk), using a fake LLM, fake KB and fake web search. Also follow-ups: a first message is routed exactly as before, a follow-up is restated, later steps use the restated question, and chats never mix.
+- `test_supabase.py` - the Supabase helper, against a fake Supabase: the right address and headers, the secret key only when a caller passes it in, plain errors that never hold a key. Also the check's key test: a secret key pasted into the publishable slot is caught.
 - `test_llm.py` - the LLM helper: strict JSON decisions, safe defaults, and the two-model setup.
 - `test_config.py` - `.env.example` holds no real key, and its defaults match `app/config.py`.
 
@@ -28,3 +29,5 @@ python -m tests.run_eval --budget 20000   stop before any one model could go ove
 `eval_questions.json` holds the 33 questions from the project brief. `eval_followups.json` holds follow-ups: each one comes with the earlier question and answer of its chat. Besides "pronoun" follow-ups ("what if it keeps dropping?"), it checks a topic switch (the old topic must not leak in), a closing "thanks", a public follow-up that goes to the web, and a company-only follow-up after a public topic (it must never search the web).
 
 It is paced to stay under Groq's per-minute limit, and it stops at the first error so a broken setup never wastes tokens.
+
+The Supabase project has its own real check, which is not part of `pytest` either: `python -m app.supabase.check --isolation` (see `app/supabase/README.md`).
