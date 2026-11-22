@@ -4,11 +4,12 @@ Run from the project root with `pytest`. No API keys needed.
 
 - `conftest.py` - shared fakes: an in-memory Pinecone and a fake embedder, so no test needs keys, a network or a model download.
 - `test_graph.py` - the "what runs next" rules, and that the graph builds.
-- `test_api.py` - health check, the page files (never cached, every page present and every file the pages link to served), the admin key rules (including "switched off"), upload, chat answers and errors, and the start-up warm-up.
+- `test_api.py` - health check, the page files (never cached, every page present and every file the pages link to served), the admin key rules (including "switched off"), upload, chat answers and errors (and a chat's earlier exchanges reaching the agent, a bad history refused), and the start-up warm-up.
 - `test_ingest.py` - reading and cutting pdf, txt, md and docx files, and the ingest command.
+- `test_memory.py` - short-term memory: only the last few exchanges are kept, each cut short, and memory can be switched off.
 - `test_store.py` - the Pinecone side: replace on re-upload, safe ids, clear errors, never deleting an index, and the warm-up (the embedding model loads only once).
 - `test_web_search.py` - the Tavily side, against a fake Tavily: results become documents, the key stays in a header, and every failure (bad key, limits, no internet, unreadable reply) gives a plain message.
-- `test_nodes.py` - every agent step, and the whole graph on all five paths (KB answer, web answer, rewrite and retry, fallback, small talk), using a fake LLM, fake KB and fake web search.
+- `test_nodes.py` - every agent step, and the whole graph on all five paths (KB answer, web answer, rewrite and retry, fallback, small talk), using a fake LLM, fake KB and fake web search. Also follow-ups: a first message is routed exactly as before, a follow-up is restated, later steps use the restated question, and chats never mix.
 - `test_llm.py` - the LLM helper: strict JSON decisions, safe defaults, and the two-model setup.
 - `test_config.py` - `.env.example` holds no real key, and its defaults match `app/config.py`.
 
@@ -20,7 +21,10 @@ Not a test. It asks the agent the questions in `eval_questions.json` with the re
 python -m tests.run_eval                  a sample of 10 questions covering every path
 python -m tests.run_eval Q01 Q23          only these questions
 python -m tests.run_eval --all            all 33 (a big bite out of the free daily Groq budget)
+python -m tests.run_eval --followups      the follow-up questions in eval_followups.json (about 35,000 tokens)
 python -m tests.run_eval --budget 20000   stop before any one model could go over 20,000 tokens
 ```
+
+`eval_questions.json` holds the 33 questions from the project brief. `eval_followups.json` holds follow-ups: each one comes with the earlier question and answer of its chat. Besides "pronoun" follow-ups ("what if it keeps dropping?"), it checks a topic switch (the old topic must not leak in), a closing "thanks", a public follow-up that goes to the web, and a company-only follow-up after a public topic (it must never search the web).
 
 It is paced to stay under Groq's per-minute limit, and it stops at the first error so a broken setup never wastes tokens.

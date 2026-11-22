@@ -1,9 +1,10 @@
 // Chat workspace: sidebar history, new-chat view and the active thread.
-// Conversations are kept in this browser only. The server answers each question on its own.
+// Conversations are kept in this browser only. Each question is sent with the earlier questions and answers of the SAME chat, so a follow-up works.
 
 const THREADS_KEY = "rag.threads";
 const TRACE_KEY = "rag.showTrace";
 const MAX_THREADS = 30;
+const HISTORY_SENT = 6; // earlier exchanges sent with a question. The server reads only the last few (MEMORY_TURNS, 3 by default)
 const SHORT_PATHS = { private_kb: "Company KB", web_search: "Web search", fallback: "Not confirmed", direct: "Chat" };
 const VERDICTS = {
   private_kb: (n) => ["verified", `Grounded in ${plural(n, "company document")}`],
@@ -212,6 +213,17 @@ function renderThread() {
 
 // ---- asking ----
 
+// The earlier question-and-answer pairs of THIS chat, oldest first, so a follow-up can be understood.
+// Failed replies are skipped, and no other chat is ever included: a new chat starts with nothing.
+function historyOf(thread) {
+  const pairs = [];
+  thread.messages.forEach((message, i) => {
+    const asked = thread.messages[i - 1];
+    if (message.role === "ai" && !message.error && asked?.role === "user") pairs.push({ question: asked.text, answer: message.text });
+  });
+  return pairs.slice(-HISTORY_SENT);
+}
+
 function setSending(on) {
   busy = on;
   setBusy("#ask, #send", on);
@@ -227,6 +239,7 @@ async function ask(question) {
     threads.unshift(thread);
     currentId = lastId = thread.id;
   }
+  const history = historyOf(thread); // taken before the new question is added
   thread.messages.push({ role: "user", text: question, at: Date.now() });
   thread.updated = Date.now();
   $("question").value = "";
@@ -240,7 +253,7 @@ async function ask(question) {
   const reply = await call("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question }),
+    body: JSON.stringify({ question, history }),
   });
   const ms = Math.round(performance.now() - started);
 

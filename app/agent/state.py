@@ -20,6 +20,16 @@ class RouteDecision(BaseModel):
     public: bool = Field(description="True if public web pages could answer it. False if it needs the company's own information.")
 
 
+class Restated(BaseModel):
+    """Listed first on purpose: the model fills the fields in order, so it has understood the message before it decides anything else."""
+
+    standalone: str = Field(description="The new message rewritten as one complete question that makes sense without the earlier messages. The same words only if it is about a new topic.")
+
+
+class FollowUpDecision(RouteDecision, Restated):
+    """What the router LLM returns when the message is part of a conversation: the usual decision, plus the restated message."""
+
+
 class EvidenceGrade(BaseModel):
     """What the grader LLM returns."""
 
@@ -34,6 +44,8 @@ class QueryRewrite(BaseModel):
 
 class AgentState(TypedDict):
     question: str  # what the user asked (never changes)
+    history: list[dict]  # earlier exchanges of this chat, oldest first: [{"question": ..., "answer": ...}]. Empty for a first message
+    standalone: str  # a follow-up restated so it makes sense on its own. Only set for a follow-up: read it with asked()
     query: str  # what we search with (changes when the question is rewritten)
     also: str  # a second search for a second topic in the question ("" if there is only one)
     public: bool  # can public web pages answer this? False means it needs company information, so the web is never searched
@@ -46,3 +58,8 @@ class AgentState(TypedDict):
     citations: list[dict]  # [{"source": file or url, "type": "kb" | "web"}]
     trace: Annotated[list[str], operator.add]  # decision path; steps return new lines, they are appended
     tokens: dict[str, int]  # LLM tokens used per model for this question. Filled in by ask(), not by the steps
+
+
+def asked(state: AgentState) -> str:
+    """The question every step after the router works on: a follow-up restated to stand alone, otherwise what the user typed."""
+    return state.get("standalone") or state["question"]

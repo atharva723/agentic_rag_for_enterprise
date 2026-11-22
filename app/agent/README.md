@@ -2,13 +2,28 @@
 
 The brain. One question goes in, one answer comes out.
 
-- `graph.py` - the whole flow on one screen: the steps, and the rules for what runs next. Start here. `ask(question)` is the entry point. It also reports (and logs) the LLM tokens each question used.
+- `graph.py` - the whole flow on one screen: the steps, and the rules for what runs next. Start here. `ask(question, history)` is the entry point (`history` = the earlier exchanges of the same chat, optional). It also reports (and logs) the LLM tokens each question used.
 - `state.py` - the shared notes every step reads and writes (question, evidence, grade, answer, decision path), and the shape of each LLM decision.
-- `prompts.py` - every instruction we send to the LLM, and how evidence is shown to it.
+- `memory.py` - short-term memory: keeps the last few exchanges of one chat (`MEMORY_TURNS`), each cut short. Nothing is stored.
+- `prompts.py` - every instruction we send to the LLM, and how evidence and earlier messages are shown to it.
 - `llm.py` - the one place that creates the LLM (Groq). `get_llm()` gives the answer model, `get_llm(fast=True)` the fast one, and `decide()` asks a model for a small decision (the fast one unless told otherwise).
 - `nodes/` - the steps themselves, one small file per job.
 
 The flow: route the question, search the KB, grade the evidence. If it is weak, search the web and grade again. If it is still weak, rewrite the question once and retry. After that, give a fallback answer.
+
+## Follow-ups (short-term memory)
+
+A follow-up like "what if it keeps disconnecting?" only makes sense with the chat before it. The agent keeps nothing between questions, so the caller sends the chat's earlier question-and-answer pairs with each new question: `ask(question, history)`. Today the chat page sends them. When chats move to a database, the server will load them instead, and `ask()` stays the same.
+
+- `memory.recent()` keeps the last `MEMORY_TURNS` pairs (3 by default) and cuts each text to 300 characters. `MEMORY_TURNS=0` switches memory off.
+- Only the router reads them. It restates the message as a complete question ("The VPN connection keeps dropping after a few hours. Is that normal?"), and writes the search query, the second search and `public` for that restated question. The grader, the rewriter and every answer step work on the restated question too. They never see the earlier messages.
+- Earlier messages are background, never facts. The router prompt says so, and every answer still comes only from evidence found for this question.
+- A new topic is left alone: after a VPN chat, "how long does a loaner laptop take?" is searched as the laptop question only. A "thanks" still gets a direct reply.
+- The safety rules run again for every message, on the restated question. After a public topic, "what is the admin password for our office router?" is still company-only and never reaches the web.
+- A chat's first message has no history, so it is routed exactly as before: same prompt, same decision shape. If the router's reply cannot be read, the message is searched as typed, with no web search.
+- The decision path shows "Follow-up understood as: ..." when the message was restated.
+
+Limits: the router is the small fast model. It sometimes leaves a short follow-up unchanged (it still writes a good search query), and a vague "it" can be read the wrong way. Exchanges older than `MEMORY_TURNS` are forgotten, and a long chat is not summarised.
 
 ## Safety rules
 
@@ -40,5 +55,6 @@ Groq counts tokens per model. On the free plan each model gets 8,000 tokens a mi
 - The models think before they answer. `reasoning_effort` is set to `low` so that hidden thinking stays small.
 - Every call has a safety cap on its reply length.
 - A typical question from the knowledge base uses about 3,000 tokens in total. A question that goes to the web uses about 4,000 to 5,000, and up to about 7,000 if it also needs a retry.
+- A follow-up costs about 300 tokens more than the same question on its own, because the router also reads the last few messages (measured: about 3,300 against about 3,000 for a knowledge base question). A "thanks" costs about 1,100.
 - To spend less on questions with no answer, set `MAX_RETRIES=0` in `.env`. The agent then skips the rewrite and the second search.
 - If Groq's limit is reached, chat answers "The AI service is busy" instead of crashing. Waiting is enough: the per-minute limit refills within a minute.

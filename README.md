@@ -23,6 +23,8 @@ Question
                still weak -> fallback answer that says what it could not confirm
 ```
 
+**Follow-ups.** Each chat sends its last few question-and-answer pairs with a new question (`MEMORY_TURNS`, 3 by default). The router uses them only to restate a follow-up as a complete question ("what if it keeps dropping?" becomes "what should I do if the VPN keeps dropping?"), and every later step works on that. Evidence is always searched fresh, and the server stores nothing between questions.
+
 ## Project map
 
 - `app/` - all Python code. Start reading at `app/agent/graph.py`.
@@ -50,7 +52,7 @@ You need Python 3.11 or newer (tested on 3.11).
 8. `uvicorn app.main:app --reload`, then open http://127.0.0.1:8000. That is the landing page: click **Open the Chat** and ask a question. The server is ready at once and loads the embedding model in the background, so a question asked in the first half minute may wait a little.
 9. Staff tools: the **Knowledge Vault** page (`/vault.html`, upload documents) and the **Settings** page (`/settings.html`, check the key and see the recent questions) stay locked until you set `ADMIN_API_KEY` in `.env`. Make a key with `python -c "import secrets; print(secrets.token_urlsafe(32))"`, paste it in `.env`, restart the app, then paste the same key on either page. Employees never need it.
 10. `pytest` (uses no keys and no tokens)
-11. Optional, with the real services: `python -m tests.run_eval` asks a sample of 10 questions and reports the path, the sources and the tokens used (about 30,000 Groq tokens, roughly 8% of one day's free budget)
+11. Optional, with the real services: `python -m tests.run_eval` asks a sample of 10 questions and reports the path, the sources and the tokens used (about 30,000 Groq tokens, roughly 8% of one day's free budget). `python -m tests.run_eval --followups` does the same for 11 follow-up questions that come with the earlier messages of their chat (about 35,000 tokens).
 
 **Using conda?** Create the env with Python in it, and switch off the shared "user" packages (a conda env still sees the ones in `AppData\Roaming\Python`, and they win over the env's own):
 
@@ -93,6 +95,7 @@ The keys come from `.env` at run time and are never copied into the image. The i
 - file types or chunking: `app/rag/ingest.py`
 - which folder of documents to load: `kb_dir` in `app/config.py` (or pass a folder to the ingest command)
 - a setting: `.env` (the full list is in `app/config.py`)
+- how much of a chat a follow-up remembers: `MEMORY_TURNS` in `.env` (`0` answers every question on its own)
 
 ## Status
 
@@ -104,7 +107,8 @@ Known limits:
 - No checker can tell look-alike names apart (a test accepted a page about "NovaERA" for "NovaERP"). That is why the router keeps passwords, tickets, people, stores and equipment questions away from the web. This guard is a model's judgement, not a guarantee: keep the answer prompt's rule that credentials are never written out.
 - The free Groq plan allows about 3,000 tokens per question from the knowledge base and 4,000 to 5,000 with web search, so roughly 60 to 90 questions a day (each model has its own 200,000-token daily limit).
 - The chat page shows plain text. There are no logins: staff use one shared admin key, which travels in a header, so put the app behind HTTPS before real use.
-- Chats and the Vault's upload list are saved in each browser only, so another browser or computer starts empty. The server has no "list documents" or "delete document" call yet: the Vault list is that browser's own upload history, and its Remove button only edits the list. It never deletes anything from the knowledge base. Each question is also answered on its own, so a follow-up does not see earlier answers.
+- Chats and the Vault's upload list are saved in each browser only, so another browser or computer starts empty. The server has no "list documents" or "delete document" call yet: the Vault list is that browser's own upload history, and its Remove button only edits the list. It never deletes anything from the knowledge base.
+- Follow-ups work because the chat page sends the last few earlier questions and answers of that chat with each new question. The server keeps nothing, so a chat cleared from the browser is forgotten, and a new chat always starts fresh. The agent reads only the last `MEMORY_TURNS` of them, cut short. A follow-up that changes topic is searched as a new question.
 - The pages load fonts and icons from Google Fonts. On a network that blocks it, icons show as words and the look is plainer. Everything still works.
 - Anyone who can reach the app can ask questions, and each question spends free Groq tokens. There is no rate limit. Keep it inside the company network, or add a limit, before a production rollout.
 - The audit log keeps every question as typed, with no clean-up. Treat it as private, and trim it from time to time.

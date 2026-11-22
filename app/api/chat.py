@@ -8,8 +8,16 @@ from app.audit import write_audit
 router = APIRouter()
 
 
+class Exchange(BaseModel):
+    """One earlier question of this chat and the answer it got."""
+
+    question: str = Field(min_length=1, max_length=3000)
+    answer: str = Field(min_length=1, max_length=8000)
+
+
 class ChatRequest(BaseModel):
     question: str = Field(min_length=2, max_length=3000)
+    history: list[Exchange] = Field(default_factory=list, max_length=20)  # earlier exchanges of THIS chat, oldest first. The agent reads only the last few
 
 
 @router.get("/health")
@@ -20,7 +28,7 @@ def health():
 @router.post("/chat")
 def chat(req: ChatRequest):
     try:
-        result = ask(req.question)
+        result = ask(req.question, [exchange.model_dump() for exchange in req.history])
     except Exception as exc:
         if getattr(exc, "status_code", None) == 429:  # the AI provider's rate limit. Free plans are small.
             raise HTTPException(

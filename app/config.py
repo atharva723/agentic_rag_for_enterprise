@@ -21,6 +21,7 @@ class Settings(BaseSettings):
 
     top_k: int = 4  # pieces of evidence per search (KB chunks or web results)
     max_retries: int = 1  # how many times a weak query may be rewritten
+    memory_turns: int = 3  # earlier question-and-answer pairs of the same chat that a follow-up may use. 0 = every question is answered on its own
 
     admin_api_key: str = ""  # empty = the staff endpoints are switched off
     upload_dir: Path = ROOT / "data" / "uploads"

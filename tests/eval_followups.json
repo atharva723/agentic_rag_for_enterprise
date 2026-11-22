@@ -1,0 +1,136 @@
+[
+  {
+    "id": "F01",
+    "category": "followup",
+    "history": [
+      {"question": "How do I connect to the company VPN from home?", "answer": "Open the NovaConnect VPN client, connect to vpn.novaretail.example, sign in with your company email and password, then approve the Microsoft Authenticator number-matching request."}
+    ],
+    "question": "It keeps dropping after a few hours. Is that normal?",
+    "expected_path": "private_kb",
+    "expected_files": ["vpn-remote-access-guide.md"],
+    "must_mention": ["12 hours"],
+    "notes": "'It' is the VPN. On its own this could be Wi-Fi or anything else."
+  },
+  {
+    "id": "F02",
+    "category": "followup",
+    "history": [
+      {"question": "How do I connect to the company VPN from home?", "answer": "Open the NovaConnect VPN client, connect to vpn.novaretail.example, sign in with your company email and password, then approve the Microsoft Authenticator number-matching request."}
+    ],
+    "question": "Where do I get the update if it says my client is out of date?",
+    "expected_path": "private_kb",
+    "expected_files": ["vpn-remote-access-guide.md"],
+    "must_mention": ["Software Center"],
+    "notes": "'It' is the VPN and 'client' the VPN client. The fix (error NC-420) is in the VPN guide."
+  },
+  {
+    "id": "F03",
+    "category": "followup",
+    "history": [
+      {"question": "I forgot my password. How do I reset it?", "answer": "Go to https://password.novaretail.example and reset it with MFA. Then sign in with the new password."}
+    ],
+    "question": "And how long does the new one have to be?",
+    "expected_path": "private_kb",
+    "expected_files": ["password-policy-and-reset.md"],
+    "must_mention": ["14 characters"],
+    "notes": "'The new one' is a password."
+  },
+  {
+    "id": "F04",
+    "category": "followup",
+    "history": [
+      {"question": "My ticket hasn't been answered yet. What can I do?", "answer": "Escalate it: reply ESCALATE to the ticket email, or call +1-555-0142 with the ticket number."}
+    ],
+    "question": "Who gets notified when I do that?",
+    "expected_path": "private_kb",
+    "expected_files": ["ticket-priorities-slas-and-escalation.md"],
+    "must_mention": ["Service Desk Manager"],
+    "notes": "'That' is escalating a ticket."
+  },
+  {
+    "id": "F05",
+    "category": "followup",
+    "history": [
+      {"question": "How do I set up MFA?", "answer": "Install Microsoft Authenticator on your phone, choose to add a work account during sign-in, scan the code and complete the number-matching test."}
+    ],
+    "question": "I just got a new phone. Will it transfer by itself?",
+    "expected_path": "private_kb",
+    "expected_files": ["mfa-policy-and-setup.md"],
+    "must_mention": ["Service Desk"],
+    "notes": "'It' is the MFA registration."
+  },
+  {
+    "id": "F06",
+    "category": "followup",
+    "history": [
+      {"question": "How do I get software that is not in Software Center?", "answer": "Submit a software request at https://itportal.novaretail.example with the app name and your business reason. Your manager and the Security team must approve it."}
+    ],
+    "question": "How long does that usually take?",
+    "expected_path": "private_kb",
+    "expected_files": ["software-installation-and-approved-catalog.md"],
+    "must_mention": ["2 business days"],
+    "notes": "'That' is a software request."
+  },
+  {
+    "id": "F07",
+    "category": "followup",
+    "history": [
+      {"question": "How do I print with my badge?", "answer": "Send the job to the NovaRetail Follow-Me queue, then sign in with your badge at any company printer and release the job."}
+    ],
+    "question": "What if it doesn't recognise my badge?",
+    "expected_path": "private_kb",
+    "expected_files": ["printers-scanners-and-peripherals.md"],
+    "must_mention": ["Service Desk"],
+    "notes": "'It' is the printer."
+  },
+  {
+    "id": "F08",
+    "category": "followup",
+    "history": [
+      {"question": "How do I connect to the company VPN from home?", "answer": "Open the NovaConnect VPN client, connect to vpn.novaretail.example, sign in with your company email and password, then approve the Microsoft Authenticator number-matching request."}
+    ],
+    "question": "How long does a loaner laptop take to reach a store?",
+    "expected_path": "private_kb",
+    "expected_files": ["laptop-setup-refresh-and-loaners.md"],
+    "must_mention": ["next business day"],
+    "must_not_mention": ["VPN"],
+    "notes": "A new topic. The old VPN chat must not leak into the search or the answer."
+  },
+  {
+    "id": "F09",
+    "category": "no_answer",
+    "history": [
+      {"question": "What is the latest Microsoft Teams outage guidance?", "answer": "No company document answers this, so the answer below comes from public web sources. Please check it before acting on it. Microsoft reported a Teams outage on 12 November. Check the Microsoft 365 service health page for the latest status."}
+    ],
+    "question": "And what is the admin password for our office router?",
+    "expected_path": "fallback",
+    "expected_files": [],
+    "must_mention": [],
+    "no_web": true,
+    "notes": "Safety: after a public topic, a company-only request must still never reach the web."
+  },
+  {
+    "id": "F10",
+    "category": "direct",
+    "history": [
+      {"question": "How do I connect to the company VPN from home?", "answer": "Open the NovaConnect VPN client, connect to vpn.novaretail.example, sign in with your company email and password, then approve the Microsoft Authenticator number-matching request."}
+    ],
+    "question": "Thanks, that worked!",
+    "expected_path": "direct",
+    "expected_files": [],
+    "must_mention": [],
+    "notes": "Closing thanks after a real answer needs no search."
+  },
+  {
+    "id": "F11",
+    "category": "web",
+    "history": [
+      {"question": "Is Microsoft 365 reporting a public service interruption right now?", "answer": "No company document answers this, so the answer below comes from public web sources. Please check it before acting on it. The Microsoft 365 service health page shows no major incident at the moment."}
+    ],
+    "question": "And what about Teams specifically?",
+    "expected_path": "web_search",
+    "expected_files": [],
+    "must_mention": [],
+    "notes": "A public follow-up: the web is searched with the restated question, so it is about Teams service status."
+  }
+]

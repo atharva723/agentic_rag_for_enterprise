@@ -6,6 +6,7 @@ from typing import Literal
 from langchain_core.callbacks import get_usage_metadata_callback
 from langgraph.graph import END, START, StateGraph
 
+from app.agent import memory
 from app.agent.nodes.answerer import answer_direct, fallback_answer, generate_answer
 from app.agent.nodes.grader import grade_evidence
 from app.agent.nodes.retriever import retrieve_kb, search_web
@@ -59,14 +60,27 @@ def _graph():
     return build_graph()
 
 
-def ask(question: str) -> AgentState:
+def ask(question: str, history: list[dict] | None = None) -> AgentState:
     """Run the agent on one question and return the final state.
+
+    history = the earlier exchanges of the SAME chat, oldest first: [{"question": ..., "answer": ...}]. Pass nothing for a chat's first message.
+    Only the last MEMORY_TURNS are used, cut short, and only to understand a follow-up. Nothing is kept after the answer is written.
 
     result["tokens"] says how many LLM tokens each model used for this question. It is also logged, so you can watch the free budget.
     """
     with get_usage_metadata_callback() as usage:
         result = _graph().invoke(
-            {"question": question, "query": question, "also": "", "public": False, "retries": 0, "docs": [], "citations": [], "trace": []}
+            {
+                "question": question,
+                "history": memory.recent(history),
+                "query": question,
+                "also": "",
+                "public": False,
+                "retries": 0,
+                "docs": [],
+                "citations": [],
+                "trace": [],
+            }
         )
     result["tokens"] = {model: counts["total_tokens"] for model, counts in usage.usage_metadata.items()}
     log.info("Tokens used: %s", result["tokens"] or "none")

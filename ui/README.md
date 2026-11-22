@@ -14,7 +14,7 @@ The web pages. Plain HTML, CSS and JavaScript. No build step. FastAPI serves thi
 What the pages do:
 
 - Chat calls `/api/chat`. While a question runs, the send buttons ignore clicks (so one question is never sent twice) and a screen reader hears "Thinking…" and then which source answered. Web sources are links. Company documents show their title and file name. The "Decision Path" chip shows or hides the steps under each answer.
-- Chats are saved in this browser only (`localStorage`). The server answers every question on its own, so a follow-up does not see earlier answers.
+- Chats are saved in this browser only (`localStorage`). Each question is sent with the last few earlier questions and answers of the same chat (never a failed reply, never another chat), so a follow-up works. The server stores nothing: it reads them for that one answer.
 - The vault uploads through `/api/ingest` and needs the admin key. The key is kept in this tab's session storage only. The server has no "list documents" endpoint, so the list is this browser's own upload history, and "Remove" only edits that list: it never deletes anything from the knowledge base.
 - Settings reads `/api/health` and `/api/audit`. If `ADMIN_API_KEY` is not set on the server, it says the staff tools are switched off.
 - Text from answers, sources and the audit log is added with `textContent`, never `innerHTML`, so web text cannot inject HTML.

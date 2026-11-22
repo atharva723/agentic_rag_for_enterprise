@@ -7,7 +7,7 @@ from app.agent import prompts
 from app.agent.graph import ask
 from app.agent.nodes import answerer, grader, rewriter, router
 from app.agent.nodes.retriever import retrieve_kb, search_web
-from app.agent.state import EvidenceGrade, QueryRewrite, RouteDecision
+from app.agent.state import EvidenceGrade, FollowUpDecision, QueryRewrite, RouteDecision
 from app.config import get_settings
 from app.rag import store
 from app.tools import web_search
@@ -28,6 +28,14 @@ def state(**extra):
 
 def decision(route="kb", query="tidy query", also="", public=True):
     return RouteDecision(route=route, query=query, also=also, public=public)
+
+
+EARLIER = [{"question": "How do I connect to the VPN?", "answer": "Open NovaConnect and approve the MFA prompt."}]
+DROPPING = "What should I do if the company VPN keeps disconnecting?"
+
+
+def restated(standalone=DROPPING, query="VPN disconnecting", route="kb", public=False):
+    return FollowUpDecision(standalone=standalone, route=route, query=query, also="", public=public)
 
 
 # ---- router ----------------------------------------------------------------
@@ -72,6 +80,41 @@ def test_router_plays_safe_when_the_model_reply_is_unreadable(fake_llm):
 def test_router_uses_the_question_when_the_model_sends_an_empty_query(fake_llm):
     fake_llm.decisions[RouteDecision] = [decision(query="   ")]
     assert router.route_question(state(question="my question"))["query"] == "my question"
+
+
+def test_router_shows_the_first_message_of_a_chat_to_the_model_exactly_as_before(fake_llm):
+    router.route_question(state(question="How do I connect to the VPN?"))
+    router.route_question(state(question="How do I connect to the VPN?", history=[]))
+    assert fake_llm.prompts == [prompts.ROUTER.format(question="How do I connect to the VPN?")] * 2
+
+
+def test_router_restates_a_follow_up_so_it_makes_sense_on_its_own(fake_llm):
+    fake_llm.decisions[FollowUpDecision] = [restated()]
+    out = router.route_question(state(question="What if it keeps disconnecting?", history=EARLIER))
+    assert out == {
+        "route": "kb",
+        "query": "VPN disconnecting",
+        "also": "",
+        "public": False,
+        "standalone": DROPPING,
+        "trace": [f"Follow-up understood as: {DROPPING}", "Router → KB (search: VPN disconnecting)"],
+    }
+    (prompt,) = fake_llm.prompts
+    assert "What if it keeps disconnecting?" in prompt
+    assert "User: How do I connect to the VPN?\nAssistant: Open NovaConnect and approve the MFA prompt." in prompt
+    assert "not a source of facts" in prompt  # earlier messages only explain what the new one refers to
+
+
+def test_router_adds_no_note_when_a_follow_up_already_makes_sense_alone(fake_llm):
+    fake_llm.decisions[FollowUpDecision] = [restated(standalone="How do I request a new laptop?", query="request new laptop")]
+    out = router.route_question(state(question="How do I request a new laptop?", history=EARLIER))
+    assert out["trace"] == ["Router → KB (search: request new laptop)"] and out["standalone"] == "How do I request a new laptop?"
+
+
+def test_router_plays_safe_when_the_reply_to_a_follow_up_is_unreadable(fake_llm):
+    out = router.route_question(state(question="What if it keeps disconnecting?", history=EARLIER))  # no decision queued
+    assert out["route"] == "kb" and out["public"] is False  # unsure: never go to the web
+    assert out["query"] == out["standalone"] == "What if it keeps disconnecting?"  # it carries on as if there were no memory
 
 
 # ---- retrievers --------------------------------------------------------------
@@ -267,6 +310,28 @@ def test_only_company_documents_are_judged_on_live_and_private_data(fake_llm):
     assert "live or current information" not in web_prompt and "{extra}" not in web_prompt
 
 
+# ---- every step after the router works on the restated question -----------------------
+
+
+def test_every_step_after_the_router_works_on_the_restated_question(fake_llm):
+    follow_up = state(question="What if it keeps disconnecting?", standalone=DROPPING, source_used="private_kb", docs=[kb_doc()])
+    fake_llm.decisions[EvidenceGrade] = [EvidenceGrade(grade="good")]
+    grader.grade_evidence(follow_up)
+    rewriter.rewrite_query(follow_up)
+    answerer.generate_answer(follow_up)
+    answerer.answer_direct(follow_up)
+    answerer.fallback_answer(follow_up)
+    assert len(fake_llm.prompts) == 5
+    for prompt in fake_llm.prompts:
+        assert DROPPING in prompt and "What if it keeps disconnecting?" not in prompt
+
+
+def test_the_age_warning_looks_for_now_in_the_restated_question(fake_llm):
+    old = (date.today() - timedelta(days=30)).isoformat()
+    follow_up = state(question="Is it back?", standalone="Is Microsoft 365 back up now?", source_used="web_search", docs=[web_doc(1, old)])
+    assert "Heads up" in answerer.generate_answer(follow_up)["answer"]
+
+
 # ---- evidence formatting ---------------------------------------------------------
 
 
@@ -289,8 +354,9 @@ def test_evidence_stops_before_the_size_limit_but_always_keeps_the_first_piece()
 
 @pytest.fixture
 def services(monkeypatch, fake_llm):
-    """Fake KB and web search that record every call, with one retry allowed."""
+    """Fake KB and web search that record every call, with one retry allowed and memory on."""
     monkeypatch.setattr(get_settings(), "max_retries", 1)
+    monkeypatch.setattr(get_settings(), "memory_turns", 3)
     calls = {"kb": [], "web": []}
     results = {"kb": [kb_doc()], "web": [web_doc(1), web_doc(2)]}
     monkeypatch.setattr(store, "search", lambda query: calls["kb"].append(query) or results["kb"])
@@ -391,3 +457,47 @@ def test_graph_carries_on_when_the_web_search_fails(services, monkeypatch):
     result = ask("anything")
     assert result["source_used"] == "fallback"
     assert any(line.startswith("Web search failed → Tavily rejected the API key") for line in result["trace"])
+
+
+# ---- follow-ups: short-term memory ------------------------------------------------------
+
+
+def test_graph_uses_earlier_messages_only_to_understand_a_follow_up(services):
+    services.decisions[FollowUpDecision] = [restated()]
+    services.decisions[EvidenceGrade] = [EvidenceGrade(grade="good")]
+    services.texts = ["Sessions end after 12 hours."]
+    result = ask("What if it keeps disconnecting?", [{"question": "How do I connect to the VPN?", "answer": "EARLIER-ANSWER"}])
+    assert result["question"] == "What if it keeps disconnecting?"  # what the user typed never changes
+    assert services.calls == {"kb": ["VPN disconnecting"], "web": []}  # searched with the restated query, not with "it"
+    assert result["trace"][:2] == [f"Follow-up understood as: {DROPPING}", "Router → KB (search: VPN disconnecting)"]
+    router_prompt, *later = services.prompts
+    assert "EARLIER-ANSWER" in router_prompt
+    assert len(later) == 2 and all(DROPPING in p and "EARLIER-ANSWER" not in p for p in later)  # grader and answer: restated question only
+
+
+def test_graph_chats_never_mix(services):
+    """The agent keeps nothing between questions: a chat only knows what it sends along with its own question."""
+    services.decisions[FollowUpDecision] = [restated()]
+    services.decisions[RouteDecision] = [decision()]
+    services.decisions[EvidenceGrade] = [EvidenceGrade(grade="good")] * 2
+    ask("What if it keeps disconnecting?", [{"question": "How do I connect to the VPN?", "answer": "EARLIER-ANSWER"}])
+    seen = len(services.prompts)
+    ask("How do I print?")  # the first message of another chat
+    assert services.prompts[seen] == prompts.ROUTER.format(question="How do I print?")
+    assert not any("EARLIER-ANSWER" in p for p in services.prompts[seen:])
+
+
+def test_graph_a_company_only_follow_up_never_reaches_the_web_even_after_a_public_topic(services):
+    said = "What is the admin password for our office router?"
+    services.decisions[FollowUpDecision] = [restated(standalone=said, query="office router admin password", public=False)]
+    services.decisions[EvidenceGrade] = [EvidenceGrade(grade="weak")] * 2
+    earlier = [{"question": "What is the latest Teams outage guidance?", "answer": "Microsoft reported an outage on 12 November."}]
+    result = ask("And the admin password for our office router?", earlier)
+    assert result["source_used"] == "fallback" and services.calls["web"] == []
+
+
+def test_graph_treats_every_question_alone_when_memory_is_off(services, monkeypatch):
+    monkeypatch.setattr(get_settings(), "memory_turns", 0)
+    decisions(services, grades=["good"])
+    ask("What if it keeps disconnecting?", EARLIER)
+    assert services.prompts[0] == prompts.ROUTER.format(question="What if it keeps disconnecting?")

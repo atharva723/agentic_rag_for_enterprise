@@ -105,7 +105,7 @@ def fake_result(**extra):
 
 
 def test_chat_returns_the_answer_sources_and_trace_and_writes_the_audit(monkeypatch):
-    monkeypatch.setattr("app.api.chat.ask", lambda question: fake_result())
+    monkeypatch.setattr("app.api.chat.ask", lambda question, history: fake_result())
     res = client.post("/api/chat", json={"question": "How do I connect to the VPN?"})
     assert res.status_code == 200
     assert res.json() == {
@@ -118,11 +118,30 @@ def test_chat_returns_the_answer_sources_and_trace_and_writes_the_audit(monkeypa
     assert entry["question"] == "How do I connect to the VPN?" and entry["trace"] == ["Router → KB"]
 
 
+def test_chat_hands_the_earlier_exchanges_of_the_chat_to_the_agent(monkeypatch):
+    seen = []
+    monkeypatch.setattr("app.api.chat.ask", lambda question, history: seen.append((question, history)) or fake_result())
+    earlier = {"question": "How do I connect to the VPN?", "answer": "Open NovaConnect."}
+    client.post("/api/chat", json={"question": "What if it keeps dropping?", "history": [earlier]})
+    client.post("/api/chat", json={"question": "How do I print?"})  # the first message of a chat sends no history
+    assert seen == [("What if it keeps dropping?", [earlier]), ("How do I print?", [])]
+
+
+@pytest.mark.parametrize(
+    "history",
+    ["text", [{"question": "only a question"}], [{"question": "q", "answer": ""}], [{"question": "q", "answer": "a"}] * 21],
+    ids=["not a list", "no answer", "empty answer", "too many"],
+)
+def test_chat_rejects_a_malformed_history_before_the_agent_runs(monkeypatch, history):
+    monkeypatch.setattr("app.api.chat.ask", lambda question, history: pytest.fail("the agent must not run"))
+    assert client.post("/api/chat", json={"question": "anything", "history": history}).status_code == 422
+
+
 def test_chat_says_busy_when_the_ai_provider_rate_limit_is_hit(monkeypatch):
     class RateLimited(Exception):
         status_code = 429
 
-    def busy(question):
+    def busy(question, history):
         raise RateLimited("tokens per day limit reached")
 
     monkeypatch.setattr("app.api.chat.ask", busy)
@@ -132,7 +151,7 @@ def test_chat_says_busy_when_the_ai_provider_rate_limit_is_hit(monkeypatch):
 
 
 def test_chat_other_failures_are_a_plain_500_without_details(monkeypatch):
-    def broken(question):
+    def broken(question, history):
         raise RuntimeError("secret internal detail")
 
     monkeypatch.setattr("app.api.chat.ask", broken)
