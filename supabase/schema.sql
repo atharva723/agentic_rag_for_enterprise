@@ -2,7 +2,7 @@
 --
 -- How to use: Supabase dashboard > SQL Editor > New query > paste this whole file > Run.
 -- The last line shows both tables with rls_on = true. It is safe to run again: it only creates what is
--- missing and replaces its own rules. Then, from the project folder:  python -m app.supabase.check --isolation
+-- missing and replaces its own rules. Then, from the project folder:  python -m app.supabase.check --full
 --
 -- Who is who in the database:
 --   anon           = nobody signed in (the publishable key alone)      -> no access at all

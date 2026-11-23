@@ -28,7 +28,7 @@ Question
 ## Project map
 
 - `app/` - all Python code. Start reading at `app/agent/graph.py`.
-- `supabase/` - the database side of accounts and saved chats (SQL only). Being added in steps: the tables and their privacy rules are ready, sign-in and saved chats come next. Set-up steps are in `supabase/README.md`.
+- `supabase/` - the database side of accounts and saved chats (SQL only). Being added in steps: the tables and their privacy rules are ready, and the server can already check a Supabase login token (`GET /api/me`). Saved chats and the sign-in page come next. Set-up steps are in `supabase/README.md`.
 - `ui/` - the web pages (plain HTML, CSS and JavaScript, no build step): a landing page, the chat, the Knowledge Vault (staff uploads) and Settings (staff key, service status, recent questions).
 - `data/` - the knowledge base documents (`data/kb/`). Uploads and the audit log appear here when the app runs.
 - `tests/` - tests. They need no API keys.
@@ -98,6 +98,7 @@ The keys come from `.env` at run time and are never copied into the image. The i
 - a setting: `.env` (the full list is in `app/config.py`)
 - how much of a chat a follow-up remembers: `MEMORY_TURNS` in `.env` (`0` answers every question on its own)
 - the chat tables or their privacy rules: `supabase/schema.sql` (then run it again in the Supabase SQL Editor)
+- how a login token is checked: `app/supabase/auth.py`. To make a route need a sign-in, add `user: User = Depends(current_user)` (from `app/api/account.py`)
 
 ## Status
 
@@ -108,7 +109,7 @@ Known limits:
 - Web answers are only as good as what the search finds, and the results change from day to day. The search cannot show live status, only what pages said when they were saved. For a "now" or "latest" question, the answer gets a "Heads up" line if even the newest page is more than a week old.
 - No checker can tell look-alike names apart (a test accepted a page about "NovaERA" for "NovaERP"). That is why the router keeps passwords, tickets, people, stores and equipment questions away from the web. This guard is a model's judgement, not a guarantee: keep the answer prompt's rule that credentials are never written out.
 - The free Groq plan allows about 3,000 tokens per question from the knowledge base and 4,000 to 5,000 with web search, so roughly 60 to 90 questions a day (each model has its own 200,000-token daily limit).
-- The chat page shows plain text. There are no logins: staff use one shared admin key, which travels in a header, so put the app behind HTTPS before real use.
+- The chat page shows plain text. It has no sign-in yet: accounts are being added in steps (the server can already check a Supabase login token, see `supabase/README.md`, but the chat does not ask for one). Staff use one shared admin key, which travels in a header, so put the app behind HTTPS before real use.
 - Chats and the Vault's upload list are saved in each browser only, so another browser or computer starts empty. The server has no "list documents" or "delete document" call yet: the Vault list is that browser's own upload history, and its Remove button only edits the list. It never deletes anything from the knowledge base.
 - Follow-ups work because the chat page sends the last few earlier questions and answers of that chat with each new question. The server keeps nothing, so a chat cleared from the browser is forgotten, and a new chat always starts fresh. The agent reads only the last `MEMORY_TURNS` of them, cut short. A follow-up that changes topic is searched as a new question.
 - The pages load fonts and icons from Google Fonts. On a network that blocks it, icons show as words and the look is plainer. Everything still works.

@@ -1,14 +1,16 @@
-"""Shared test helpers: an in-memory Pinecone and a fake embedder, so no test needs keys, a network or a model download."""
+"""Shared test helpers: an in-memory Pinecone, a fake embedder, a fake LLM and a fake Supabase, so no test needs keys, a network or a model download."""
 import math
 import re
 import zlib
 from types import SimpleNamespace
 
+import httpx
 import pytest
 
 from app.agent import llm
 from app.config import get_settings
 from app.rag import store
+from app.supabase import client as supabase_client
 
 DIM = 256
 
@@ -131,3 +133,32 @@ def fake_llm(monkeypatch):
     monkeypatch.setattr(llm, "decide", fake.decide)
     monkeypatch.setattr(llm, "get_llm", fake.get_llm)
     return fake
+
+
+class FakeSupabase:
+    """Stands in for the Supabase server. Set what it answers, then read what it was sent."""
+
+    url, publishable = "https://abc.supabase.co", "sb_publishable_test"
+
+    def __init__(self):
+        self.status, self.payload, self.error, self.requests = 200, [], None, []
+
+    def handle(self, request: httpx.Request) -> httpx.Response:
+        self.requests.append(request)
+        if self.error:
+            raise self.error
+        return httpx.Response(self.status, json=self.payload)
+
+
+@pytest.fixture
+def supabase(monkeypatch):
+    """Swap the network for a fake Supabase. The real request() still runs, so URL and header handling are tested."""
+    fake = FakeSupabase()
+    settings = get_settings()
+    monkeypatch.setattr(settings, "supabase_url", fake.url + "/")  # the trailing slash must not double up
+    monkeypatch.setattr(settings, "supabase_publishable_key", fake.publishable)
+    real_client = httpx.Client
+    monkeypatch.setattr(supabase_client.httpx, "Client", lambda **kwargs: real_client(transport=httpx.MockTransport(fake.handle), **kwargs))
+    supabase_client._http.cache_clear()
+    yield fake
+    supabase_client._http.cache_clear()

@@ -30,7 +30,7 @@ class Settings(BaseSettings):
 
     supabase_url: str = ""  # https://<project>.supabase.co (accounts and saved chats). Empty = no Supabase
     supabase_publishable_key: str = ""  # sb_publishable_...  Safe to show in a browser: row-level security in the database protects the data
-    supabase_secret_key: str = ""  # sb_secret_...  Skips row-level security. Only `python -m app.supabase.check --isolation` reads it, to make and delete test users. The running app never uses it
+    supabase_secret_key: str = ""  # sb_secret_...  Skips row-level security. Only `python -m app.supabase.check --full` reads it, to make and delete test users. The running app never uses it
 
 
 @lru_cache

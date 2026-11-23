@@ -5,52 +5,24 @@ import httpx
 import pytest
 
 from app.config import get_settings
-from app.supabase import check, client
+from app.supabase import client
 from app.supabase.client import SupabaseError
 
-PUBLISHABLE = "sb_publishable_test"
 SECRET = "sb_secret_test"
-
-
-class FakeSupabase:
-    """Stands in for the Supabase server. Set what it answers, then read what it was sent."""
-
-    def __init__(self):
-        self.status, self.payload, self.error, self.requests = 200, [], None, []
-
-    def handle(self, request: httpx.Request) -> httpx.Response:
-        self.requests.append(request)
-        if self.error:
-            raise self.error
-        return httpx.Response(self.status, json=self.payload)
-
-
-@pytest.fixture
-def supabase(monkeypatch):
-    """Swap the network for a fake Supabase. The real request() still runs, so URL and header handling are tested."""
-    fake = FakeSupabase()
-    settings = get_settings()
-    monkeypatch.setattr(settings, "supabase_url", "https://abc.supabase.co/")  # the trailing slash must not double up
-    monkeypatch.setattr(settings, "supabase_publishable_key", PUBLISHABLE)
-    real_client = httpx.Client
-    monkeypatch.setattr(client.httpx, "Client", lambda **kwargs: real_client(transport=httpx.MockTransport(fake.handle), **kwargs))
-    client._http.cache_clear()
-    yield fake
-    client._http.cache_clear()
 
 
 def test_a_call_from_nobody_sends_the_publishable_key_in_apikey_and_no_token(supabase):
     client.request("GET", "/rest/v1/conversations", params={"select": "id"})
     (sent,) = supabase.requests
     assert str(sent.url) == "https://abc.supabase.co/rest/v1/conversations?select=id"
-    assert sent.headers["apikey"] == PUBLISHABLE
+    assert sent.headers["apikey"] == supabase.publishable
     assert "authorization" not in sent.headers  # the new sb_ keys are not tokens
 
 
 def test_a_signed_in_call_adds_the_users_token_and_keeps_the_callers_own_headers(supabase):
     client.request("POST", "/rest/v1/messages", token="user-token", json=[{"content": "hi"}], headers={"Prefer": "return=representation"})
     (sent,) = supabase.requests
-    assert sent.headers["apikey"] == PUBLISHABLE and sent.headers["authorization"] == "Bearer user-token"
+    assert sent.headers["apikey"] == supabase.publishable and sent.headers["authorization"] == "Bearer user-token"
     assert sent.headers["prefer"] == "return=representation" and json.loads(sent.content) == [{"content": "hi"}]
 
 
@@ -59,7 +31,7 @@ def test_the_secret_key_is_used_only_when_the_caller_passes_it_in(supabase):
     client.request("GET", "/auth/v1/settings")
     secret_call, normal_call = supabase.requests
     assert secret_call.headers["apikey"] == SECRET and "authorization" not in secret_call.headers
-    assert normal_call.headers["apikey"] == PUBLISHABLE
+    assert normal_call.headers["apikey"] == supabase.publishable
 
 
 def test_an_old_style_key_is_a_token_so_it_is_sent_both_ways():
@@ -82,7 +54,7 @@ def test_an_unreachable_supabase_is_a_plain_error_that_never_contains_the_key(su
     supabase.error = httpx.ConnectError("boom")
     with pytest.raises(SupabaseError) as caught:
         client.request("GET", "/auth/v1/settings")
-    assert "ConnectError" in str(caught.value) and PUBLISHABLE not in str(caught.value)
+    assert "ConnectError" in str(caught.value) and supabase.publishable not in str(caught.value)
 
 
 def old_style_key(role):
@@ -101,6 +73,6 @@ def old_style_key(role):
         ("a.b.c", "unknown"),
     ],
 )
-def test_the_check_can_tell_a_publishable_key_from_a_secret_key(key, expected):
-    """A secret key pasted into the publishable slot would one day be shown in a browser, so the check must catch it."""
-    assert check.kind(key) == expected
+def test_a_publishable_key_is_told_apart_from_a_secret_key(key, expected):
+    """A secret key pasted into the publishable slot would be handed to every visitor of the sign-in page, so it must be caught."""
+    assert client.key_kind(key) == expected

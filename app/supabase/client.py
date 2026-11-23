@@ -6,6 +6,8 @@ A call is made as one of two people:
   so the row-level security rules in supabase/schema.sql decide what the call can reach.
 The secret key skips those rules. Only the check command passes it in. The running app never does.
 """
+import base64
+import json
 from functools import lru_cache
 
 import httpx
@@ -27,6 +29,20 @@ def _http() -> httpx.Client:
 def configured() -> bool:
     settings = get_settings()
     return bool(settings.supabase_url and settings.supabase_publishable_key)
+
+
+def key_kind(key: str) -> str:
+    """"publishable", "secret" or "unknown". Only the kind of key is read: the key itself is never shown or logged."""
+    if key.startswith("sb_publishable_"):
+        return "publishable"
+    if key.startswith("sb_secret_"):
+        return "secret"
+    try:  # an old-style key is a token that names its own role
+        part = key.split(".")[1]
+        role = json.loads(base64.urlsafe_b64decode(part + "=" * (-len(part) % 4))).get("role")
+    except (IndexError, ValueError, AttributeError):
+        return "unknown"
+    return {"anon": "publishable", "service_role": "secret"}.get(role, "unknown")
 
 
 def headers(key: str, token: str | None = None) -> dict:
