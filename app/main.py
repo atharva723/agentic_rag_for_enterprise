@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from app.api import account, admin, chat
+from app.api import account, admin, chat, conversations
 from app.config import ROOT, get_settings
 from app.rag import store
 
@@ -44,4 +44,5 @@ app = FastAPI(title="IT Support Agentic RAG Copilot", lifespan=lifespan)
 app.include_router(chat.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 app.include_router(account.router, prefix="/api")
+app.include_router(conversations.router, prefix="/api")
 app.mount("/", PageFiles(directory=ROOT / "ui", html=True), name="ui")

@@ -9,7 +9,7 @@ The database side of accounts and saved chats. SQL only. The Python side is in `
 1. Sign up at https://supabase.com and create a project. The free plan is enough. Pick the region nearest you. The database password is not used anywhere in this app.
 2. Project Settings > API Keys: copy the Project URL, the publishable key (`sb_publishable_...`) and the secret key (`sb_secret_...`). Put them in `.env` as `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` and `SUPABASE_SECRET_KEY`. Use `.env`, not `.env.example`. Never paste a key into a chat or commit it.
 3. SQL Editor > New query: paste all of `schema.sql` and press Run. The result at the bottom shows both tables with `rls_on = true`.
-4. Check it: `python -m app.supabase.check` (quick and read-only), then `python -m app.supabase.check --full` (makes two test users and deletes them again. It proves that sign-in works, that our server accepts real login tokens and refuses forged ones, and that one user cannot see or change another's chats).
+4. Check it: `python -m app.supabase.check` (quick and read-only), then `python -m app.supabase.check --full` (makes two test users and deletes them again. It proves that sign-in works, that our server accepts real login tokens and refuses forged ones, that saved chats work through our own routes, and that one user cannot see or change another's chats. It spends no AI tokens).
 5. The project must sign its login tokens with the new asymmetric keys (ES256 or RS256), which is the default for new projects. The quick check says so. If it complains, open Project Settings > JWT Keys and migrate.
 
 ## How the server knows who you are
@@ -26,6 +26,20 @@ Limits to know:
 - A login token cannot be called back. After sign-out, or after an account is deleted, it still passes our server's check until it expires (up to an hour). The database rules still hold: a deleted account has no data.
 - When Supabase rotates its signing keys, a token signed with the new key can be refused for up to a minute, until our server looks at the key list again.
 - Anonymous guests (Supabase's "anonymous sign-ins") are refused on purpose, so that per-user limits cannot be dodged by signing in again and again.
+
+## How a saved chat works
+
+1. The page creates a chat (`POST /api/conversations`) and asks in it (`POST /api/conversations/{id}/messages`). The routes are listed in `app/api/README.md`.
+2. The server loads the chat's last few messages from the database, so a follow-up such as "what if it keeps dropping?" makes sense. The page never sends the history, so nobody can invent one. Because it lives in the database, it survives a new sign-in, another browser and a server restart. Each chat has its own history: a new chat starts blank.
+3. The agent answers (see `app/agent/README.md`). The question and the answer are then saved together in one request, and the first question names the chat.
+4. Every database call is made as the signed-in user, so the privacy rules apply to each one. Whether a chat is yours is checked before the agent runs, so someone else's chat costs no AI tokens.
+
+Good to know:
+- If the earlier messages cannot be loaded (a Supabase problem), the question is still answered, on its own, with a warning. If the answer cannot be saved, it is still returned, with a warning, but it is not in the chat history.
+- A question is saved only after it was answered. If the page gives up waiting and asks again, the first answer may have been saved after all, so the chat can hold the question twice. The page can reload the chat to see what was saved.
+- The login token is checked when a request arrives. If it runs out while the agent is still working (rare), the answer is shown but not saved.
+- Reading a chat returns its newest 200 messages (500 at most), oldest first.
+- The staff audit log is still a local SQLite file (`data/audit.db`), not part of Supabase. It records the user id and the chat id of every question asked in a saved chat.
 
 ## How the privacy rules work
 

@@ -2,11 +2,11 @@
 
     python -m app.supabase.check          a quick read-only check (a few calls, nothing is created)
     python -m app.supabase.check --full   also makes two throwaway users and proves, with their real login tokens, that sign-in
-                                          works, that OUR server accepts the tokens and refuses forged ones, and that one user cannot
-                                          see or change another user's chats
+                                          works, that OUR server accepts the tokens and refuses forged ones, that saved chats work
+                                          through our routes, and that one user cannot see or change another user's chats
 
 --full uses the secret key to make the two users, then deletes both and everything they made. It is not part of pytest: it needs your
-project and your keys. No key or token is ever printed.
+project and your keys. It spends no AI tokens (the agent is replaced by a stand-in). No key or token is ever printed.
 """
 import argparse
 import secrets
@@ -123,6 +123,76 @@ def login_tokens(ids: list[str], tokens: list[str], emails: list[str]) -> None:
     )
 
 
+def saved_chats(ids: list[str], tokens: list[str]) -> None:
+    """Saved chats through OUR routes, with two real login tokens. The AI agent is replaced by a stand-in that answers for free, so
+    this spends no AI tokens. Everything else is real: the login check, the routes, and the database with its privacy rules."""
+    print("Saved chats (through our own routes)")
+    import tempfile  # imported here so the quick check starts fast
+    from pathlib import Path
+    from unittest import mock
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from app import audit
+    from app.api import conversations
+
+    (a, _), (ta, tb) = ids, tokens
+    settings, asked = get_settings(), []
+
+    def stand_in(question, history):
+        asked.append((question, history))
+        return {
+            "answer": f"Answer to: {question}",
+            "source_used": "private_kb",
+            "citations": [{"source": "vpn.md", "type": "kb", "title": "VPN Guide"}],
+            "trace": ["Router → KB", "Answer generated from PRIVATE KB"],
+        }
+
+    mini = FastAPI()
+    mini.include_router(conversations.router, prefix="/api")
+    web, as_a, as_b = TestClient(mini), {"Authorization": f"Bearer {ta}"}, {"Authorization": f"Bearer {tb}"}
+    first_question = "How do I connect to the company VPN from home?"
+    with tempfile.TemporaryDirectory() as folder, mock.patch("app.api.chat.ask", stand_in), mock.patch.object(settings, "audit_db", Path(folder) / "audit.db"):
+        made = web.post("/api/conversations", headers=as_a)
+        if not step(made.status_code == 201 and made.json().get("title") == "New chat", "A creates a chat: POST /api/conversations", f"HTTP {made.status_code}: {made.text[:120]}"):
+            return
+        cid = made.json()["id"]
+        base = f"/api/conversations/{cid}"
+        first = web.post(f"{base}/messages", headers=as_a, json={"question": first_question})
+        body = first.json() if first.status_code == 200 else {}
+        step(
+            body.get("saved") is True and body.get("warnings") == [] and body.get("title") == first_question,
+            "A asks a question: it is answered, saved, and the chat is named after it",
+            f"HTTP {first.status_code}: {first.text[:160]}",
+        )
+        invented = [{"question": "invented", "answer": "invented"}]
+        second = web.post(f"{base}/messages", headers=as_a, json={"question": "What if it keeps dropping?", "history": invented})
+        remembered = [{"question": first_question, "answer": f"Answer to: {first_question}"}]
+        step(second.status_code == 200 and len(asked) == 2 and asked[1][1] == remembered, "a follow-up gets the first exchange from the database, and a history made up by the client is ignored")
+        thread = web.get(f"{base}/messages", headers=as_a).json()
+        step([m["role"] for m in thread] == ["user", "assistant"] * 2 and thread[1]["source_used"] == "private_kb" and thread[1]["citations"][0]["source"] == "vpn.md", "A reads the thread back: 4 messages in order, with their sources")
+        step([c["id"] for c in web.get("/api/conversations", headers=as_a).json()] == [cid], "A's chat list shows the chat")
+        renamed = web.patch(base, headers=as_a, json={"title": "My VPN chat"})
+        step(renamed.status_code == 200 and renamed.json()["title"] == "My VPN chat", "A renames the chat")
+        step(web.post(f"{base}/messages", headers=as_a, json={"question": "Thanks, that helped!"}).json().get("title") == "My VPN chat", "a title A chose is kept when A asks again")
+
+        calls_before = len(asked)
+        step(cid not in [c["id"] for c in web.get("/api/conversations", headers=as_b).json()], "A's chat is not in B's chat list")
+        step(web.get(f"{base}/messages", headers=as_b).status_code == 404, "B cannot read A's chat: 404")
+        step(web.post(f"{base}/messages", headers=as_b, json={"question": "B uses A's chat"}).status_code == 404 and len(asked) == calls_before, "B cannot ask in A's chat: 404, and the agent is never called")
+        step(web.patch(base, headers=as_b, json={"title": "hacked"}).status_code == 404, "B cannot rename A's chat: 404")
+        step(web.delete(base, headers=as_b).status_code == 404, "B cannot delete A's chat: 404")
+        step(len(web.get(f"{base}/messages", headers=as_a).json()) == 6 and web.get("/api/conversations", headers=as_a).json()[0]["title"] == "My VPN chat", "A's chat is exactly as it was after B's attempts")
+        step(web.get("/api/conversations").status_code == 401, "without a login token the chat list answers 401")
+
+        rows = audit.recent()
+        step(len(rows) == 3 and all(r["user_id"] == a and r["conversation_id"] == cid for r in rows), "the audit log has A's 3 questions with A's id and the chat id, and nothing for B (a temporary file)")
+        step(web.delete(base, headers=as_a).status_code == 204 and web.get("/api/conversations", headers=as_a).json() == [], "A deletes the chat: DELETE answers 204")
+        left = request("GET", "/rest/v1/messages", key=settings.supabase_secret_key, params={"conversation_id": f"eq.{cid}"})
+        step(left.status_code == 200 and left.json() == [], "its messages are gone too (looked at with the secret key)")
+
+
 def full() -> None:
     """Two throwaway users: sign-in, our server's token check, and a try at each other's chats. The secret key is used only to make
     and delete the users and to look behind the privacy rules."""
@@ -196,6 +266,7 @@ def full() -> None:
         step(len(rows(rest("POST", "conversations", tb, json={"title": "B's own chat"}, headers=back))) == 1, "B creates B's own chat (so deleting B's account has something to remove too)")
         step(len(rows(rest("DELETE", "conversations", ta, params={"id": f"eq.{cid}"}, headers=back))) == 1, "A deletes A's own chat")
         step(rows(admin("GET", "/rest/v1/messages", params={"conversation_id": f"eq.{cid}"})) == [], "deleting a chat deletes its messages too (looked at with the secret key)")
+        saved_chats(ids, tokens)
     except Exception as exc:  # an odd reply or a dropped connection: say so, and still clean up below
         step(False, "the test stopped early", f"{type(exc).__name__}: {exc}")
     finally:

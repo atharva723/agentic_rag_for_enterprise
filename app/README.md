@@ -12,6 +12,6 @@ Files here:
 
 - `main.py` - starts the web app. Serves the API and the web pages, and warms up the knowledge base in the background.
 - `config.py` - reads every setting from `.env`.
-- `audit.py` - saves each question and its decision path to a small SQLite file.
+- `audit.py` - saves each question and its decision path to a small SQLite file, and (for a question asked in a saved chat) who asked and in which chat.
 
 One rule: calls only go downhill. `api` can call `agent`, `rag` and `supabase`. `agent` can call `rag` and `tools`. Nothing calls back up.

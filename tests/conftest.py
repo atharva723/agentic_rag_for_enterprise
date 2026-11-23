@@ -142,11 +142,14 @@ class FakeSupabase:
 
     def __init__(self):
         self.status, self.payload, self.error, self.requests = 200, [], None, []
+        self.router = None  # a function(request) -> response, for tests that need more than one canned answer
 
     def handle(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
         if self.error:
             raise self.error
+        if self.router:
+            return self.router(request)
         return httpx.Response(self.status, json=self.payload)
 
 

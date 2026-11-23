@@ -20,6 +20,18 @@ class ChatRequest(BaseModel):
     history: list[Exchange] = Field(default_factory=list, max_length=20)  # earlier exchanges of THIS chat, oldest first. The agent reads only the last few
 
 
+def run_agent(question: str, history: list[dict]) -> dict:
+    """Run the agent. The AI provider's rate limit (free plans are small) becomes a plain 429 "busy" message."""
+    try:
+        return ask(question, history)
+    except Exception as exc:
+        if getattr(exc, "status_code", None) == 429:
+            raise HTTPException(
+                status_code=429, detail="The AI service is busy or its daily limit is used up. Please try again in a few minutes."
+            ) from exc
+        raise
+
+
 @router.get("/health")
 def health():
     return {"status": "ok"}
@@ -27,14 +39,7 @@ def health():
 
 @router.post("/chat")
 def chat(req: ChatRequest):
-    try:
-        result = ask(req.question, [exchange.model_dump() for exchange in req.history])
-    except Exception as exc:
-        if getattr(exc, "status_code", None) == 429:  # the AI provider's rate limit. Free plans are small.
-            raise HTTPException(
-                status_code=429, detail="The AI service is busy or its daily limit is used up. Please try again in a few minutes."
-            ) from exc
-        raise
+    result = run_agent(req.question, [exchange.model_dump() for exchange in req.history])
     write_audit(req.question, result["source_used"], result["trace"])
     return {
         "answer": result["answer"],
