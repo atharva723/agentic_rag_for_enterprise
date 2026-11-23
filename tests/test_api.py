@@ -53,11 +53,21 @@ def test_the_page_files_are_served_and_always_rechecked_by_the_browser():
 def test_every_page_is_served_and_every_file_the_pages_load_exists():
     """The pages link to each other and load scripts, styles and images by relative path. One missing file breaks a page."""
     pages = sorted((ROOT / "ui").glob("*.html"))
-    assert {p.name for p in pages} >= {"index.html", "chat.html", "vault.html", "settings.html"}
+    assert {p.name for p in pages} >= {"index.html", "chat.html", "login.html", "vault.html", "settings.html"}
     for page in pages:
         assert client.get(f"/{page.name}").status_code == 200, page.name
         for target in LOCAL_LINK.findall(page.read_text(encoding="utf-8")):
             assert client.get(f"/{target}").status_code == 200, f"{page.name} links to {target}"
+
+
+def test_sign_in_pages_load_the_library_then_auth_then_their_own_script_and_staff_pages_do_not_load_auth():
+    """auth.js needs the library, and a page script needs auth.js the moment it starts, so the order matters. The staff pages use the
+    admin key: if they loaded auth.js, a wrong key (401) would send a staff member to the login page."""
+    for page, own in (("chat.html", "app.js"), ("login.html", "login.js")):
+        scripts = re.findall(r'<script src="([^"]+)"', (ROOT / "ui" / page).read_text(encoding="utf-8"))
+        assert scripts == ["vendor/supabase.js", "common.js", "auth.js", own], page
+    for page in ("vault.html", "settings.html"):
+        assert "auth.js" not in (ROOT / "ui" / page).read_text(encoding="utf-8"), page
 
 
 def test_start_up_warms_the_knowledge_base_in_the_background(monkeypatch):
@@ -100,61 +110,7 @@ def test_an_unreadable_upload_is_a_clear_422_and_leaves_no_file(monkeypatch, tmp
     assert not (tmp_path / "uploads" / "blank.md").exists()
 
 
-def fake_result(**extra):
-    return {"answer": "Open NovaConnect.", "source_used": "private_kb", "citations": [{"source": "vpn.md", "type": "kb"}], "trace": ["Router → KB"], **extra}
-
-
-def test_chat_returns_the_answer_sources_and_trace_and_writes_the_audit(monkeypatch):
-    monkeypatch.setattr("app.api.chat.ask", lambda question, history: fake_result())
-    res = client.post("/api/chat", json={"question": "How do I connect to the VPN?"})
-    assert res.status_code == 200
-    assert res.json() == {
-        "answer": "Open NovaConnect.",
-        "source_used": "private_kb",
-        "citations": [{"source": "vpn.md", "type": "kb"}],
-        "trace": ["Router → KB"],
-    }
-    (entry,) = client.get("/api/audit", headers=ADMIN).json()
-    assert entry["question"] == "How do I connect to the VPN?" and entry["trace"] == ["Router → KB"]
-
-
-def test_chat_hands_the_earlier_exchanges_of_the_chat_to_the_agent(monkeypatch):
-    seen = []
-    monkeypatch.setattr("app.api.chat.ask", lambda question, history: seen.append((question, history)) or fake_result())
-    earlier = {"question": "How do I connect to the VPN?", "answer": "Open NovaConnect."}
-    client.post("/api/chat", json={"question": "What if it keeps dropping?", "history": [earlier]})
-    client.post("/api/chat", json={"question": "How do I print?"})  # the first message of a chat sends no history
-    assert seen == [("What if it keeps dropping?", [earlier]), ("How do I print?", [])]
-
-
-@pytest.mark.parametrize(
-    "history",
-    ["text", [{"question": "only a question"}], [{"question": "q", "answer": ""}], [{"question": "q", "answer": "a"}] * 21],
-    ids=["not a list", "no answer", "empty answer", "too many"],
-)
-def test_chat_rejects_a_malformed_history_before_the_agent_runs(monkeypatch, history):
-    monkeypatch.setattr("app.api.chat.ask", lambda question, history: pytest.fail("the agent must not run"))
-    assert client.post("/api/chat", json={"question": "anything", "history": history}).status_code == 422
-
-
-def test_chat_says_busy_when_the_ai_provider_rate_limit_is_hit(monkeypatch):
-    class RateLimited(Exception):
-        status_code = 429
-
-    def busy(question, history):
-        raise RateLimited("tokens per day limit reached")
-
-    monkeypatch.setattr("app.api.chat.ask", busy)
-    res = client.post("/api/chat", json={"question": "anything"})
-    assert res.status_code == 429
-    assert "busy" in res.json()["detail"] and "tokens per day" not in res.json()["detail"]  # no provider details leak
-
-
-def test_chat_other_failures_are_a_plain_500_without_details(monkeypatch):
-    def broken(question, history):
-        raise RuntimeError("secret internal detail")
-
-    monkeypatch.setattr("app.api.chat.ask", broken)
-    res = TestClient(app, raise_server_exceptions=False).post("/api/chat", json={"question": "anything"})
-    assert res.status_code == 500
-    assert "secret internal detail" not in res.text
+def test_the_open_chat_route_is_gone_so_every_question_needs_a_sign_in():
+    """/api/chat took questions from anyone and spent AI tokens on them. Chats now go through /api/conversations, which needs a sign-in."""
+    assert client.post("/api/chat", json={"question": "anything"}).status_code in (404, 405)
+    assert client.get("/api/chat").status_code == 404

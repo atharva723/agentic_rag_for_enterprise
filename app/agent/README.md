@@ -13,7 +13,7 @@ The flow: route the question, search the KB, grade the evidence. If it is weak, 
 
 ## Follow-ups (short-term memory)
 
-A follow-up like "what if it keeps disconnecting?" only makes sense with the chat before it. The agent keeps nothing between questions, so the caller sends the chat's earlier question-and-answer pairs with each new question: `ask(question, history)`. In a saved chat (`/api/conversations/{id}/messages`) the server loads them from the database, so nobody can invent a chat history. The older `/api/chat` takes them from the request. `ask()` is the same either way.
+A follow-up like "what if it keeps disconnecting?" only makes sense with the chat before it. The agent keeps nothing between questions, so the caller gives it the chat's earlier question-and-answer pairs with each new question: `ask(question, history)`. In a saved chat (`/api/conversations/{id}/messages`) the server loads them from the database, so nobody can invent a chat history. The evaluation script (`tests/run_eval.py --followups`) passes its own.
 
 - `memory.recent()` keeps the last `MEMORY_TURNS` pairs (3 by default) and cuts each text to 300 characters. `MEMORY_TURNS=0` switches memory off.
 - Only the router reads them. It restates the message as a complete question ("The VPN connection keeps dropping after a few hours. Is that normal?"), and writes the search query, the second search and `public` for that restated question. The grader, the rewriter and every answer step work on the restated question too. They never see the earlier messages.

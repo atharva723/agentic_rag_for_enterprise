@@ -68,13 +68,17 @@ $("forget").addEventListener("click", () => {
 });
 $("load-audit").addEventListener("click", () => !isBusy("#load-audit") && refresh());
 
+// Chats used to be saved in this browser. They now live in the person's account, so whatever is left here is old and no longer shown.
+const OLD_CHATS_KEY = "rag.threads";
+
 function counts() {
   $("upload-count").textContent = `${plural(docsStore.all().filter((d) => d.status === "ready").length, "document")} added from this browser`;
-  $("chat-count").textContent = `${plural(load("rag.threads", []).length, "saved conversation")}`;
+  const old = load(OLD_CHATS_KEY, []).length;
+  $("chat-count").textContent = old ? `${plural(old, "chat")} saved in this browser before accounts` : "None. Chats are saved to your account now.";
 }
 $("clear-chats").addEventListener("click", () => {
-  if (!confirm("Delete all saved conversations from this browser?")) return;
-  localStorage.removeItem("rag.threads");
+  if (!confirm("Delete the old chats saved in this browser? Chats in your account are not affected.")) return;
+  localStorage.removeItem(OLD_CHATS_KEY);
   counts();
 });
 $("clear-uploads").addEventListener("click", () => {

@@ -308,7 +308,7 @@ kbd {
 }
 .thread-head h2 { font: 600 14px var(--font-head); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .thread-head img { width: 28px; height: 28px; object-fit: contain; filter: drop-shadow(1px 1px 0 rgba(0, 0, 0, 0.2)); }
-.thread-head .right span { font: 400 12px var(--font-mono); color: var(--on-variant); white-space: nowrap; }
+.thread-head .right > span { font: 400 12px var(--font-mono); color: var(--on-variant); white-space: nowrap; }
 
 .msg-user { display: flex; align-items: flex-start; justify-content: flex-end; gap: 12px; }
 .bubble-user {
@@ -562,7 +562,7 @@ input[type="checkbox"]:checked::after {
 /* Dialog */
 dialog.sheet {
   padding: 0; border: 2.5px solid var(--ink); border-radius: 4px; background: var(--background); color: var(--on-surface); width: min(440px, calc(100vw - 32px));
-  box-shadow: 6px 6px 0 var(--ink);
+  box-shadow: 6px 6px 0 var(--ink); overscroll-behavior: contain;
 }
 dialog.sheet::backdrop { background: rgba(27, 28, 24, 0.45); }
 dialog.sheet .bar-title {
@@ -574,11 +574,42 @@ dialog.sheet .bar-title button {
 }
 dialog.sheet form { padding: 20px; display: flex; flex-direction: column; gap: 12px; }
 dialog.sheet label { font: 600 12px var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; }
-dialog.sheet p { font-size: 13px; color: var(--on-variant); }
+dialog.sheet p { font-size: 13px; color: var(--on-variant); overflow-wrap: anywhere; }
 dialog.sheet .row { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
 .form-note { min-height: 18px; font: 400 12px var(--font-mono); color: var(--on-variant); }
 .form-note.bad { color: var(--error); }
 .form-note.good { color: var(--secondary); }
+
+/* ============ Sign-in: the gate before the chat, the account box and the login page ============ */
+
+body.gated .topbar, body.gated .shell { display: none; }
+body:not(.gated) .gate { display: none; }
+.gate { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 24px; text-align: center; }
+.gate img { width: 88px; height: 88px; object-fit: contain; filter: drop-shadow(2px 3px 0 rgba(0, 0, 0, 0.15)); }
+.gate h1 { font: 700 24px var(--font-head); letter-spacing: -0.02em; }
+.gate p { max-width: 440px; font-size: 14px; color: var(--on-variant); }
+.gate .row { display: flex; gap: 8px; margin-top: 8px; }
+
+.account {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; border: 1px solid var(--ink-15);
+  border-radius: 4px; background: var(--white); font: 400 11px var(--font-mono);
+}
+.account .who { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--on-variant); }
+.account .link-btn { flex-shrink: 0; text-decoration: underline; text-underline-offset: 2px; }
+
+.thread-head .right { flex-shrink: 0; }
+.icon-btn.danger:hover { color: var(--error); border-color: var(--error); }
+.btn-danger { border-color: var(--ink); font-weight: 700; background: var(--error); color: #fff; box-shadow: 2px 2px 0 var(--ink); }
+.btn-danger:hover:not([aria-disabled="true"]) { background: var(--on-error-container); }
+.card-note { padding: 8px 10px; border-left: 2px solid #b45309; background: #fff8e6; font: 400 12px var(--font-mono); color: var(--on-variant); }
+
+.auth-main { max-width: 460px; margin: 0 auto; padding: 48px 16px 64px; }
+.auth-card > img { width: 72px; height: 72px; object-fit: contain; margin: 0 auto 8px; filter: drop-shadow(2px 3px 0 rgba(0, 0, 0, 0.15)); }
+.auth-card h1 { font: 700 26px var(--font-head); letter-spacing: -0.02em; text-align: center; }
+.auth-card > p { text-align: center; margin-top: 4px; }
+.auth-card .switcher { margin-bottom: 16px; }
+.auth-card .switcher button { flex: 1; justify-content: center; }
+.panel form .hint { margin: -4px 0 0; font: 400 11px var(--font-mono); color: var(--outline); }
 
 /* Settings */
 .settings-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; align-items: start; }
@@ -621,6 +652,8 @@ table.audit details ol { margin: 6px 0 0; padding-left: 18px; color: var(--on-va
   .sticker-bulb { display: none; }
   .composer-bar .chip span:not(.ms) { display: none; }
   .thread-inner { padding: 20px 14px; }
+  .thread-head .right img { display: none; }
+  .auth-main { padding: 24px 12px 48px; }
   .bubble-user { max-width: 100%; }
   .msg-user > .avatar, .msg-ai > .ai-mark { display: none; }
   .dock-hints span:first-child { display: none; }

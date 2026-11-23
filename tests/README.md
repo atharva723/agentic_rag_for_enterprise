@@ -4,7 +4,7 @@ Run from the project root with `pytest`. No API keys needed.
 
 - `conftest.py` - shared fakes: an in-memory Pinecone, a fake embedder, a fake LLM and a fake Supabase, so no test needs keys, a network or a model download.
 - `test_graph.py` - the "what runs next" rules, and that the graph builds.
-- `test_api.py` - health check, the page files (never cached, every page present and every file the pages link to served), the admin key rules (including "switched off"), upload, chat answers and errors (and a chat's earlier exchanges reaching the agent, a bad history refused), and the start-up warm-up.
+- `test_api.py` - health check, the page files (never cached, every page present, including the login page, and every file the pages link to served), the order the sign-in pages load their scripts in (and that the staff pages do not load `auth.js`), that the old open `/api/chat` route is gone, the admin key rules (including "switched off"), upload, and the start-up warm-up.
 - `test_ingest.py` - reading and cutting pdf, txt, md and docx files, and the ingest command.
 - `test_memory.py` - short-term memory: only the last few exchanges are kept, each cut short, and memory can be switched off.
 - `test_store.py` - the Pinecone side: replace on re-upload, safe ids, clear errors, never deleting an index, and the warm-up (the embedding model loads only once).

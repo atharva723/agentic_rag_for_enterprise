@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#fbf9f2">
+  <title>Agentic RAG | Sign in</title>
+  <link rel="icon" href="assets/pixel-bot.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="page">
+  <header class="page-header">
+    <div class="page-header-inner">
+      <a class="page-brand" href="index.html">
+        <span class="mark"><span class="ms" aria-hidden="true">auto_awesome_motion</span></span>
+        <span class="names"><strong>Agentic RAG</strong><small>IT Support</small></span>
+      </a>
+      <a class="btn btn-strong" href="index.html"><span class="ms ms-sm" aria-hidden="true">arrow_back</span><span>Home</span></a>
+    </div>
+  </header>
+
+  <main class="auth-main">
+    <section class="panel auth-card" aria-labelledby="auth-title">
+      <img src="assets/pixel-bot.png" alt="">
+      <h1 id="auth-title">Sign in</h1>
+      <p id="auth-lead">Your chats are saved to your account, so you can carry on from any device.</p>
+
+      <div class="switcher" id="tabs" role="group" aria-label="Sign in or create an account">
+        <button type="button" id="tab-in" aria-pressed="true">Sign In</button>
+        <button type="button" id="tab-up" aria-pressed="false">Create Account</button>
+      </div>
+
+      <form id="auth-form">
+        <label for="email">Email</label>
+        <input class="field" id="email" name="email" type="email" autocomplete="email" spellcheck="false" required>
+        <label for="password">Password</label>
+        <input class="field" id="password" name="password" type="password" autocomplete="current-password" required>
+        <p class="hint" id="password-hint" hidden>At least 8 characters.</p>
+        <button class="btn btn-primary" id="auth-submit" type="submit">Sign In</button>
+        <p class="form-note" id="auth-note" role="status"></p>
+        <button class="btn btn-soft" id="resend" type="button" hidden>Send the Email Again</button>
+      </form>
+    </section>
+  </main>
+
+  <script src="vendor/supabase.js"></script>
+  <script src="common.js"></script>
+  <script src="auth.js"></script>
+  <script src="login.js"></script>
+</body>
+</html>

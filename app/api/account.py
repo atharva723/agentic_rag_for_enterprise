@@ -34,7 +34,7 @@ def me(user: auth.User = Depends(current_user)):
 def sign_in_settings():
     """What the sign-in page needs to talk to Supabase. It is all safe to show to anyone, so no sign-in is needed to read it."""
     if not configured():
-        return {"supabase": None}  # accounts are switched off: the page works without a sign-in
+        return {"supabase": None}  # accounts are switched off: the chat page says so instead of asking for a sign-in
     settings = get_settings()
     if key_kind(settings.supabase_publishable_key) != "publishable":  # a secret key here would be handed to every visitor
         raise HTTPException(

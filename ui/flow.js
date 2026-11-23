@@ -51,7 +51,7 @@
 
   // ---- the four routes, written from what graph.py really does ----
 
-  const Q = { n: "q", title: "A question arrives", text: "Typed in the chat and sent to the server, with the last few messages of that chat so a follow-up makes sense.", fn: "POST /api/chat" };
+  const Q = { n: "q", title: "A question arrives", text: "Typed in the chat and sent to the server with the person's sign-in. The server adds the last few messages of that saved chat, so a follow-up makes sense.", fn: "POST /api/conversations/{id}/messages" };
   const REPLY = (text) => ({ n: "reply", title: "Reply sent", text, fn: "write_audit" });
   const FAST = "fast model";
   const BIG = "answer model";

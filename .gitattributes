@@ -1,0 +1,2 @@
+# Keep the vendored library byte-for-byte as published, so its hash in ui/vendor/README.md always matches
+ui/vendor/supabase.js -text

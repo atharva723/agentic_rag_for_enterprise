@@ -1,7 +1,7 @@
 """Saves every question and its decision path to a small SQLite file (basic audit trail).
 
-user_id and conversation_id say who asked and in which saved chat. They stay empty for a question asked without an account (the older
-/api/chat). A file made before they existed is upgraded in place, so it keeps its rows.
+user_id and conversation_id say who asked and in which saved chat. They are empty on rows written before accounts existed (when anyone could
+ask through the old /api/chat). A file made before they existed is upgraded in place, so it keeps its rows.
 """
 import json
 import sqlite3

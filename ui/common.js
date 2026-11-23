@@ -1,4 +1,4 @@
-// Helpers shared by the chat, vault and settings pages.
+// Helpers shared by the chat, vault, settings and login pages.
 const $ = (id) => document.getElementById(id);
 
 // What each way of answering is called on the page.
@@ -26,9 +26,15 @@ const setBusy = (selector, busy) => document.querySelectorAll(selector).forEach(
 const isBusy = (selector) => document.querySelector(selector)?.getAttribute("aria-disabled") === "true";
 
 // Talk to the server. It never throws: a failure comes back as { ok: false, status: 0 }.
+// On a page with sign-in (auth.js), our own /api/ calls carry the person's token, and a 401 sends them back to sign in.
 async function call(url, options = {}, timeout = CHAT_TIMEOUT_MS) {
   try {
-    const res = await fetch(url, { ...options, signal: AbortSignal.timeout?.(timeout) });
+    const withAuth = typeof Auth !== "undefined" && url.startsWith("/api/");
+    const headers = new Headers(options.headers);
+    const token = withAuth ? await Auth.token() : "";
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    const res = await fetch(url, { ...options, headers, signal: AbortSignal.timeout?.(timeout) });
+    if (withAuth && res.status === 401) Auth.expired();
     return { ok: res.ok, status: res.status, body: await res.json().catch(() => ({})) };
   } catch {
     return { ok: false, status: 0, body: {} };
