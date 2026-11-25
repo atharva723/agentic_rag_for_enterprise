@@ -2,11 +2,14 @@
 
 user_id and conversation_id say who asked and in which saved chat. They are empty on rows written before accounts existed (when anyone could
 ask through the old /api/chat). A file made before they existed is upgraded in place, so it keeps its rows.
+
+Rows older than AUDIT_RETENTION_DAYS (90 by default) are deleted: when the server starts, and each time a question is saved. The log holds
+every question as typed, so it should not be kept for ever. Deleting a chat does not delete its audit rows: they expire with the rest.
 """
 import json
 import sqlite3
 from contextlib import closing
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from app.config import get_settings
 
@@ -40,12 +43,30 @@ def _connect() -> sqlite3.Connection:
     return con
 
 
+def _delete_expired(con: sqlite3.Connection) -> int:
+    """Delete the rows older than AUDIT_RETENTION_DAYS (0 = keep everything). Returns how many were deleted."""
+    days = get_settings().audit_retention_days
+    if days <= 0:
+        return 0
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()  # every created_at is written the same way, so text order is time order
+    return con.execute("DELETE FROM query_audit WHERE created_at < ?", (cutoff,)).rowcount
+
+
+def prune() -> int:
+    """Delete the rows past the retention period. Returns how many. Does nothing, and makes no file, when there is no audit file yet."""
+    if not get_settings().audit_db.exists():
+        return 0
+    with closing(_connect()) as con, con:
+        return _delete_expired(con)
+
+
 def write_audit(question: str, source_used: str, trace: list[str], user_id: str | None = None, conversation_id: str | None = None) -> None:
     with closing(_connect()) as con, con:
         con.execute(
             "INSERT INTO query_audit (created_at, question, source_used, trace_json, user_id, conversation_id) VALUES (?, ?, ?, ?, ?, ?)",
             (datetime.now(timezone.utc).isoformat(), question, source_used, json.dumps(trace), user_id, conversation_id),
         )
+        _delete_expired(con)  # the table stays small, so this takes a moment even on every question
 
 
 def recent(limit: int = 50) -> list[dict]:

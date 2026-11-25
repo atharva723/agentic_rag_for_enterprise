@@ -10,11 +10,14 @@ from datetime import datetime, timedelta, timezone
 
 import httpx
 import pytest
+from conftest import parse_events
 from fastapi.testclient import TestClient
 
 from app import audit
 from app.api import conversations as routes
+from app.api import limits
 from app.api.account import current_user
+from app.api.streaming import INTERNAL_ERROR
 from app.config import get_settings
 from app.main import app
 from app.supabase import conversations as chats
@@ -126,13 +129,22 @@ class ChatStore:
 
 
 class Agent:
-    """Stands in for the AI agent: it records what it was asked and answers without spending a token."""
+    """Stands in for the AI agent: it records what it was asked and answers without spending a token.
+    When watched (on_step given), it reports the steps in `steps`, the way the real graph does."""
 
     def __init__(self):
         self.calls = []
+        self.steps = [
+            {"step": "route_question", "status": "start", "label": "Understanding your question…"},
+            {"step": "route_question", "status": "done", "lines": ["Router → KB"]},
+            {"step": "generate_answer", "status": "start", "label": "Writing the answer from the company documents…"},
+            {"step": "generate_answer", "status": "done", "lines": ["Answer generated from PRIVATE KB"]},
+        ]
 
-    def __call__(self, question, history):
+    def __call__(self, question, history, on_step=None):
         self.calls.append((question, history))
+        for event in self.steps if on_step else []:
+            on_step(event)
         return {
             "answer": f"Answer to: {question}",
             "source_used": "private_kb",
@@ -432,8 +444,9 @@ def test_an_expired_login_is_a_401_on_every_route_and_costs_no_ai_tokens(agent):
         web.delete(f"/api/conversations/{NOBODYS_CHAT}"),
         web.get(f"/api/conversations/{NOBODYS_CHAT}/messages"),
         web.post(f"/api/conversations/{NOBODYS_CHAT}/messages", json={"question": "hello there"}),
+        web.post(f"/api/conversations/{NOBODYS_CHAT}/messages/stream", json={"question": "hello there"}),
     ]
-    assert [r.status_code for r in replies] == [401] * 6 and agent.calls == []
+    assert [r.status_code for r in replies] == [401] * 7 and agent.calls == []
     assert all(r.headers["www-authenticate"] == "Bearer" and "expired" in r.json()["detail"] for r in replies)
 
 
@@ -489,6 +502,7 @@ ROUTES = [
     ("delete", f"/api/conversations/{NOBODYS_CHAT}", None),
     ("get", f"/api/conversations/{NOBODYS_CHAT}/messages", None),
     ("post", f"/api/conversations/{NOBODYS_CHAT}/messages", {"question": "hello there"}),
+    ("post", f"/api/conversations/{NOBODYS_CHAT}/messages/stream", {"question": "hello there"}),
 ]
 
 
@@ -502,6 +516,203 @@ def test_with_accounts_switched_off_the_routes_say_so(monkeypatch):
     monkeypatch.setattr(get_settings(), "supabase_url", "")
     reply = web.get("/api/conversations", headers={"Authorization": "Bearer some-token"})
     assert reply.status_code == 503 and "switched off" in reply.json()["detail"]
+
+
+# ---- per-person limits ------------------------------------------------------------------------------------------------------
+
+
+def set_limits(monkeypatch, per_minute=0, per_day=0):
+    monkeypatch.setattr(get_settings(), "rate_limit_per_minute", per_minute)
+    monkeypatch.setattr(get_settings(), "rate_limit_per_day", per_day)
+
+
+def test_a_person_can_ask_only_so_many_questions_a_minute(store, agent, monkeypatch):
+    set_limits(monkeypatch, per_minute=2)
+    chat_id = new_chat()
+    assert [say(chat_id, f"Question {n}").status_code for n in (1, 2)] == [200, 200]
+    reply = say(chat_id, "Question 3")
+    assert reply.status_code == 429 and 1 <= int(reply.headers["retry-after"]) <= 60
+    assert "The limit is 2 questions a minute" in reply.json()["detail"] and "Please wait" in reply.json()["detail"]
+    assert len(agent.calls) == 2 and len(store.messages) == 4 and len(audit.recent()) == 2  # the refused question ran, saved and audited nothing
+
+
+def test_the_daily_limit_says_so_and_how_long_to_wait(monkeypatch):
+    set_limits(monkeypatch, per_day=1)
+    chat_id = new_chat()
+    assert say(chat_id, "Question 1").status_code == 200
+    reply = say(chat_id, "Question 2")
+    assert reply.status_code == 429 and int(reply.headers["retry-after"]) > 86_000
+    assert reply.json()["detail"] == "You have asked 1 question in the last 24 hours, which is the limit. You can ask again in 24 hours."
+
+
+def test_each_person_has_their_own_allowance(monkeypatch):
+    set_limits(monkeypatch, per_minute=1)
+    ana_chat, ben_chat = new_chat("ana"), new_chat("ben")
+    assert say(ana_chat, "Ana asks").status_code == 200
+    assert say(ana_chat, "Ana asks again").status_code == 429
+    assert say(ben_chat, "Ben asks", name="ben").status_code == 200
+
+
+def test_the_other_chat_routes_still_work_when_the_questions_are_used_up(monkeypatch):
+    set_limits(monkeypatch, per_minute=1)
+    chat_id = new_chat()
+    say(chat_id, "Question 1")
+    assert say(chat_id, "Question 2").status_code == 429
+    as_("ana")
+    assert web.get("/api/conversations").status_code == 200
+    assert web.get(f"/api/conversations/{chat_id}/messages").status_code == 200
+    assert web.patch(f"/api/conversations/{chat_id}", json={"title": "Renamed"}).status_code == 200
+    assert web.delete(f"/api/conversations/{chat_id}").status_code == 204
+
+
+def test_waiting_is_enough_and_a_refused_question_does_not_make_the_wait_longer(clock, monkeypatch):
+    monkeypatch.setattr(limits.questions, "clock", clock)
+    set_limits(monkeypatch, per_minute=1)
+    chat_id = new_chat()
+    assert say(chat_id, "One").status_code == 200
+    clock.now += 30
+    assert [say(chat_id, "Too soon").status_code for _ in range(3)] == [429] * 3
+    clock.now += 30
+    assert say(chat_id, "Two").status_code == 200
+
+
+def test_a_question_the_ai_was_too_busy_to_answer_does_not_count(agent, monkeypatch):
+    set_limits(monkeypatch, per_minute=1)
+    chat_id = new_chat()
+
+    class Busy(Exception):
+        status_code = 429
+
+    def busy(question, history):
+        raise Busy("tokens per day limit reached")
+
+    monkeypatch.setattr("app.api.chat.ask", busy)
+    assert "busy" in say(chat_id, "One").json()["detail"]
+    monkeypatch.setattr("app.api.chat.ask", agent)
+    assert say(chat_id, "Two").status_code == 200  # the busy one was given back
+    assert "The limit is 1 question a minute" in say(chat_id, "Three").json()["detail"]
+
+
+def test_a_refused_question_does_nothing_else_not_even_a_database_call(supabase, agent, monkeypatch):
+    set_limits(monkeypatch, per_minute=1)
+    chat_id = new_chat()
+    say(chat_id, "One")
+    before = len(supabase.requests)
+    assert say(chat_id, "Two").status_code == 429
+    assert len(supabase.requests) == before and len(agent.calls) == 1
+
+
+def test_a_missing_login_is_a_401_never_a_429(agent, monkeypatch):
+    set_limits(monkeypatch, per_minute=1)
+    replies = [web.post(f"/api/conversations/{NOBODYS_CHAT}/messages", json={"question": "hello there"}) for _ in range(3)]
+    assert [r.status_code for r in replies] == [401] * 3 and agent.calls == []
+
+
+@pytest.mark.parametrize("method, url, body", ROUTES)
+def test_every_chat_route_counts_towards_the_request_limit(method, url, body, agent, monkeypatch):
+    monkeypatch.setattr(limits, "REQUESTS_PER_MINUTE", 1)
+    as_("ana")
+    assert web.get("/api/conversations").status_code == 200  # the one allowed request
+    reply = getattr(web, method)(url, **({"json": body} if body else {}))
+    assert reply.status_code == 429 and reply.json()["detail"].startswith("Too many requests. Please wait") and agent.calls == []
+    assert reply.headers["retry-after"].isdigit()
+    as_("ben")
+    assert web.get("/api/conversations").status_code == 200  # someone else is not affected
+
+
+# ---- streaming: the same question, with the steps shown as they happen -------------------------------------------------------
+
+
+def stream(chat_id, question, name="ana"):
+    as_(name)
+    return web.post(f"/api/conversations/{chat_id}/messages/stream", json={"question": question})
+
+
+def test_the_stream_sends_each_step_as_it_happens_and_then_the_answer(agent):
+    chat_id = new_chat()
+    res = stream(chat_id, "How do I connect to the VPN?")
+    assert res.status_code == 200 and res.headers["content-type"].startswith("text/event-stream")
+    assert res.headers["cache-control"] == "no-cache, no-transform" and res.headers["x-accel-buffering"] == "no"
+    events = parse_events(res.text)
+    assert [name for name, _ in events] == ["step"] * 4 + ["answer"]
+    assert [data for name, data in events if name == "step"] == agent.steps
+    assert events[-1][1]["answer"] == "Answer to: How do I connect to the VPN?"
+
+
+def test_the_streamed_answer_is_exactly_what_the_plain_route_returns():
+    plain_chat, streamed_chat = new_chat(), new_chat()
+    plain = say(plain_chat, "How do I connect to the VPN?").json()
+    assert parse_events(stream(streamed_chat, "How do I connect to the VPN?").text)[-1] == ("answer", plain)
+
+
+def test_a_streamed_question_is_saved_audited_and_remembered_like_any_other(store, agent):
+    chat_id = new_chat()
+    stream(chat_id, "How do I connect to the VPN?")
+    assert [m["role"] for m in store.messages] == ["user", "assistant"]
+    (row,) = audit.recent()
+    assert (row["user_id"], row["conversation_id"], row["trace"]) == (ANA, chat_id, ["Router → KB", "Answer generated from PRIVATE KB"])
+    assert titles() == ["How do I connect to the VPN?"]
+    stream(chat_id, "What if it keeps dropping?")
+    assert agent.calls[-1][1] == [{"question": "How do I connect to the VPN?", "answer": "Answer to: How do I connect to the VPN?"}]  # from the database, as ever
+
+
+def test_a_chat_that_is_not_yours_is_a_plain_404_before_anything_streams_and_costs_no_ai_tokens(agent):
+    chat_id = new_chat("ana")
+    res = stream(chat_id, "Ben tries Ana's chat", name="ben")
+    assert res.status_code == 404 and res.headers["content-type"] == "application/json" and res.json() == {"detail": "Chat not found."}
+    assert stream(NOBODYS_CHAT, "Anyone there?").status_code == 404
+    assert agent.calls == []
+
+
+def test_a_used_up_limit_is_a_plain_429_before_anything_streams(agent, monkeypatch):
+    set_limits(monkeypatch, per_minute=1)
+    chat_id = new_chat()
+    assert stream(chat_id, "One").status_code == 200
+    res = stream(chat_id, "Two")
+    assert res.status_code == 429 and res.headers["content-type"] == "application/json" and res.headers["retry-after"].isdigit()
+    assert len(agent.calls) == 1
+
+
+def test_a_busy_ai_service_ends_the_stream_with_an_error_event_and_the_question_does_not_count(store, agent, monkeypatch):
+    set_limits(monkeypatch, per_minute=1)
+    chat_id = new_chat()
+
+    class Busy(Exception):
+        status_code = 429
+
+    def busy(question, history, on_step=None):
+        on_step(agent.steps[0])  # the first step had started when the AI said no
+        raise Busy("tokens per day limit reached")
+
+    monkeypatch.setattr("app.api.chat.ask", busy)
+    res = stream(chat_id, "One")
+    assert res.status_code == 200  # the stream had begun
+    (first, last) = parse_events(res.text)
+    assert first == ("step", agent.steps[0]) and last[0] == "error" and last[1]["status"] == 429
+    assert "busy" in last[1]["detail"] and "tokens per day" not in res.text  # no provider details leak
+    assert store.messages == [] and audit.recent() == []
+    monkeypatch.setattr("app.api.chat.ask", agent)
+    assert parse_events(stream(chat_id, "Two").text)[-1][0] == "answer"  # the busy one was given back, so the limit of 1 still has room
+
+
+def test_an_agent_crash_ends_the_stream_with_a_plain_error_and_no_details(store, monkeypatch, caplog):
+    chat_id = new_chat()
+
+    def broken(question, history, on_step=None):
+        raise RuntimeError("secret internal detail")
+
+    monkeypatch.setattr("app.api.chat.ask", broken)
+    res = stream(chat_id, "A question")
+    assert parse_events(res.text) == [("error", {"status": 500, "detail": INTERNAL_ERROR})]
+    assert "secret internal detail" not in res.text and store.messages == []
+    assert "secret internal detail" in caplog.text  # only in our own log
+
+
+def test_a_streamed_answer_is_still_returned_when_it_cannot_be_saved(store):
+    chat_id = new_chat()
+    store.failing[("POST", "/rest/v1/messages")] = 500
+    name, body = parse_events(stream(chat_id, "An answer that cannot be saved").text)[-1]
+    assert name == "answer" and body["saved"] is False and body["warnings"] == [routes.NOT_SAVED]
 
 
 # ---- the small helpers ------------------------------------------------------------------------------------------------------

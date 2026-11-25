@@ -1,4 +1,5 @@
 """Shared test helpers: an in-memory Pinecone, a fake embedder, a fake LLM and a fake Supabase, so no test needs keys, a network or a model download."""
+import json
 import math
 import re
 import zlib
@@ -8,11 +9,57 @@ import httpx
 import pytest
 
 from app.agent import llm
+from app.api import limits
 from app.config import get_settings
 from app.rag import store
 from app.supabase import client as supabase_client
 
 DIM = 256
+
+
+def parse_events(text: str) -> list[tuple[str, dict]]:
+    """The events in a Server-Sent Events body, as (name, data) pairs, the way a page reads them. Comment lines (keep-alives) are skipped."""
+    events = []
+    for block in text.split("\n\n"):
+        name, data = "message", []
+        for line in block.splitlines():
+            if line.startswith(":"):
+                continue
+            field, _, value = line.partition(":")
+            value = value.removeprefix(" ")
+            if field == "event":
+                name = value
+            elif field == "data":
+                data.append(value)
+        if data:
+            events.append((name, json.loads("\n".join(data))))
+    return events
+
+
+class Clock:
+    """A clock a test can move: `clock.now += 60`."""
+
+    def __init__(self):
+        self.now = 1000.0
+
+    def __call__(self):
+        return self.now
+
+
+@pytest.fixture
+def clock():
+    return Clock()
+
+
+@pytest.fixture(autouse=True)
+def rate_limits_off(monkeypatch):
+    """The question limits are off in every test (they would trip a test that asks many questions as one person), and the counters
+    start empty. A test that is about the limits turns them on."""
+    settings = get_settings()
+    monkeypatch.setattr(settings, "rate_limit_per_minute", 0)
+    monkeypatch.setattr(settings, "rate_limit_per_day", 0)
+    limits.questions.reset()
+    limits.calls.reset()
 
 
 def fake_embed(texts, *, query=False):

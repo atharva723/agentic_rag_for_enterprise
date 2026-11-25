@@ -1,8 +1,17 @@
 # api/
 
-The web door. It checks the input, calls the right code, and returns JSON. Almost no logic here: the one exception is the send-message route of saved chats, which ties the agent, the audit log and the saved chat together in a few lines.
+The web door. It checks the input, calls the right code, and returns JSON. Almost no logic here: the one exception is the send-message routes of saved chats (plain and streamed), which share one function that ties the agent, the audit log and the saved chat together in a few lines.
 
-- `chat.py` - `GET /api/health` (no sign-in needed) and `run_agent()`, which runs the agent and turns the AI provider's rate limit into a plain 429 "busy" answer. The saved-chat routes use it. There is no open `POST /api/chat` any more: it took questions from anyone, without a sign-in, and spent AI tokens on them. Every question now goes through a saved chat of a signed-in user.
+- `chat.py` - `GET /api/health` (no sign-in needed) and `run_agent()`, which runs the agent and turns the AI provider's rate limit into a plain 429 "busy" answer. The saved-chat routes use it. There is no open `POST /api/chat`: it would let anyone spend AI tokens, so every question goes through a saved chat of a signed-in user.
+- `streaming.py` - Server-Sent Events for a slow job. `stream(job)` runs the job in its own thread and sends what it reports to the page as it happens, then the result as the last event.
+  - Because the job runs apart from the connection, closing the tab never stops it: the answer is still saved.
+  - It sends a `: keep-alive` comment every 15 seconds so a quiet connection is not closed, and turns an error inside the job into an `error` event (the details are only logged).
+  - When the server stops, `wait_for_jobs()` (called by the shut-down step in `app/main.py`) gives running jobs up to 30 seconds to finish and save.
+  - The page reads it with `fetch()`, not `EventSource`, because `EventSource` cannot send the sign-in header.
+- `limits.py` - per-person limits on the saved-chat routes, counted per user id from the verified login token (so signing in again does not reset them). See `app/ratelimit.py`.
+  - `allow_requests` is on the whole chat router: a fixed 120 requests a minute per person, so one account cannot hammer the database.
+  - `allow_question` replaces `current_user` on the route that asks the AI: `RATE_LIMIT_PER_MINUTE` and `RATE_LIMIT_PER_DAY` in `.env` (5 and 20 by default, `0` = no limit).
+  - A refused call answers 429 with a plain message and a `Retry-After` header, is not counted, and nothing else runs: no database call, no AI call. A question that the AI service was too busy to answer is given back.
 - `account.py` - accounts. `current_user` is the dependency that makes a route need a sign-in: add `user: User = Depends(current_user)` to the route. It reads `Authorization: Bearer <login token>` and answers 401 (no valid token: sign in, or sign in again) or 503 (the check cannot be done right now). `GET /api/me` returns the signed-in user's `id` and `email`. `GET /api/config` returns what the sign-in page needs, `{"supabase": {"url": ..., "publishable_key": ...}}`, or `{"supabase": null}` when accounts are switched off. It never returns the secret key. See `supabase/README.md`.
 - `conversations.py` - saved chats of a signed-in user. Every route needs a sign-in. A chat that is not yours looks exactly like a chat that does not exist (404).
   - `GET /api/conversations?limit=50` - your chats, the most recently used first: `[{"id", "title", "created_at", "updated_at"}]`.
@@ -10,8 +19,15 @@ The web door. It checks the input, calls the right code, and returns JSON. Almos
   - `PATCH /api/conversations/{id}` with `{"title": "..."}` - rename. `DELETE /api/conversations/{id}` - delete the chat and its messages (204).
   - `GET /api/conversations/{id}/messages?limit=200` - the newest `limit` messages, oldest first: `[{"id", "role", "content", "source_used", "citations", "trace", "latency_ms", "created_at"}]`. A new chat answers `[]`.
   - `POST /api/conversations/{id}/messages` with `{"question": "..."}` - ask in this chat. The server loads the chat's earlier messages from the database (a `history` in the request is ignored), the agent answers, and the question and answer are saved together. The answer is `{"answer", "source_used", "citations", "trace", "saved", "title", "warnings"}`. `title` is the chat's title after this message: the first question names a chat that still has the default title, and a title you chose is never replaced.
+  - `POST /api/conversations/{id}/messages/stream` - the same question, same checks, same limits and same saved result, but the reply is a stream of events, so the page can show the steps as they happen (this is what the chat page uses). Each event is `event: <name>` and `data: <one line of JSON>`:
+    - `step` - `{"step", "status": "start", "label"}` when a step begins ("Searching the company documents…"), and `{"step", "status": "done", "lines": [...]}` when it ends, with the decision-path lines it wrote. See `app/agent/progress.py`.
+    - `answer` - the last event of a good run: the same JSON as the plain route above.
+    - `error` - the last event of a bad run: `{"status", "detail"}`, for example 429 "the AI service is busy". A crash is a plain 500 message.
+    - Anything that can be refused before the agent starts is a normal HTTP error and no stream is opened: 401 (sign in), 404 (not your chat), 429 (over a limit), 503 (Supabase cannot be reached). Once the stream has started its status is already 200, so a later problem arrives as an `error` event instead.
+    - The agent keeps working if the page goes away (a closed tab, a lost connection): the answer is still saved and audited. The page then shows "no reply came back", and reloading the chat shows the answer.
+    - If the server is told to stop meanwhile (a restart, `docker stop`), its shut-down step waits up to 30 seconds (`STOP_WAIT_SECONDS`) for answers that are still being made to finish and save. It has to: the process ends right after that step and would kill them. A hard kill (`kill -9`, a crash, the auto-reloader on Windows) cannot wait, and such an answer is lost.
   - If the chat's earlier messages cannot be loaded, the question is still answered, on its own, with a warning in `warnings`. If the answer cannot be saved, it is still returned, with `saved: false` and a warning. Whether the chat is yours is checked before the agent runs, so a chat that is not yours costs no AI tokens.
-  - 401 = no valid login (sign in again). 429 = the AI service is busy. 503 = Supabase cannot be reached, try again.
+  - 401 = no valid login (sign in again). 429 = the AI service is busy, or the person is over a limit (see `limits.py`: the message says which, and how long to wait). 503 = Supabase cannot be reached, try again.
 - `admin.py` - for staff. Needs the `X-Admin-Key` header: `POST /api/ingest` (upload a document) and `GET /api/audit` (recent questions, now with the `user_id` and `conversation_id` of questions asked in a saved chat). The Knowledge Vault and Settings pages use these two.
 
 If `ADMIN_API_KEY` is empty, the staff endpoints are off: they answer 403 "Staff tools are switched off…" to everyone. With a key set, a wrong or missing key gets 401.

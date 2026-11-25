@@ -10,12 +10,19 @@ const VERDICTS = {
   fallback: () => ["help", "Could not confirm this from the available sources"],
   direct: () => ["chat_bubble", "Chat reply, no search needed"],
 };
+// The one line above a finished answer, by the way it was answered.
+const SUMMARIES = {
+  private_kb: "Searched company documents",
+  web_search: "Searched company documents, then the web",
+  fallback: "Searched, but could not confirm",
+  direct: "Replied without searching",
+};
 
 let threads = []; // this person's chats, newest first: { id, title, updated, messages }. messages stays null until the chat is opened
 let currentId = null; // null means the new-chat view
 let lastId = null;
 let busy = false; // a request that changes things is running
-let pending = null; // the chat whose question is being answered
+let pending = null; // the question being answered: { thread, lines: the steps done so far, label: what is running now }
 let listError = ""; // why the list of chats could not be loaded
 
 const isMac = /mac|iphone|ipad/i.test(navigator.platform || navigator.userAgent);
@@ -204,14 +211,6 @@ function aiCard(message, isLast) {
   const sources = sourcesBlock(message);
   if (sources) card.append(sources);
 
-  if (message.trace?.length) {
-    const trace = el("details", "", { className: "trace", open: true });
-    const steps = el("ol");
-    steps.append(...message.trace.map((line) => el("li", line)));
-    trace.append(el("summary", "Decision Path"), steps);
-    card.append(trace);
-  }
-
   const foot = el("div", "", { className: "card-foot" });
   const actions = el("div");
   if (message.error && isLast && message.question) {
@@ -224,22 +223,63 @@ function aiCard(message, isLast) {
   }
   foot.append(actions, el("span", message.error ? "" : `Answered from: ${PATHS[message.source_used] ?? message.source_used}`, { className: "path" }));
   card.append(foot);
+  return aiRow(activitySummary(message), card);
+}
 
+// A row for the AI: its mark, then the parts of its reply one above the other.
+function aiRow(...parts) {
+  const body = el("div", "", { className: "ai-body" });
+  body.append(...parts.filter(Boolean));
   const row = el("div", "", { className: "msg-ai" });
-  row.append(el("div", "AI", { className: "ai-mark" }), card);
+  row.append(el("div", "AI", { className: "ai-mark" }), body);
   return row;
 }
 
-function thinkingCard() {
-  const card = el("div", "", { className: "card-ai", id: "pending" });
-  const line = el("div", "", { className: "thinking" });
-  const dots = el("span", "", { className: "dots" });
-  dots.append(el("i"), el("i"), el("i"));
-  line.append(dots, el("span", "Searching company documents…"));
-  card.append(line);
-  const row = el("div", "", { className: "msg-ai" });
-  row.append(el("div", "AI", { className: "ai-mark" }), card);
-  return row;
+const stepRow = (line) => el("li", line, { className: "step-done" });
+
+// What the AI did, as one quiet line above its answer. It opens to the steps it took.
+function activitySummary(message) {
+  const lines = message.trace ?? [];
+  if (!lines.length) return null;
+  const steps = plural(lines.length, "step").replace(" ", "\u00a0"); // "6 steps" never splits across two lines
+  const meta = [message.error ? "" : steps, message.ms ? latency(message.ms) : ""].filter(Boolean).join(" · ");
+  const head = el("summary", "", { className: "activity-head" });
+  head.append(el("span", message.error ? `Stopped after ${steps}` : (SUMMARIES[message.source_used] ?? "Answered")));
+  if (meta) head.append(el("span", ` · ${meta}`));
+  const list = el("ol", "", { className: "activity-steps" });
+  list.append(...lines.map(stepRow));
+  const box = el("details", "", { className: "activity" });
+  box.append(head, list);
+  return box;
+}
+
+// While the question is being answered: the steps done so far, then the one running now.
+const paintLive = (list) => list.replaceChildren(...pending.lines.map(stepRow), el("li", pending.label, { className: "step-running" }));
+
+function liveActivity() {
+  const list = el("ol", "", { className: "activity-steps", id: "pending" });
+  list.setAttribute("aria-live", "off"); // a screen reader hears the current step from the status line, not every row
+  paintLive(list);
+  const box = el("div", "", { className: "activity live" });
+  box.append(list);
+  return box;
+}
+
+// One step of the running question. Only the live block is redrawn, so the rest of the chat (and any text being selected in it) stays put.
+function showStep(event) {
+  if (!pending) return;
+  if (event.status === "start") {
+    pending.label = event.label;
+    $("status").textContent = event.label;
+  } else {
+    pending.lines.push(...(event.lines ?? []));
+  }
+  const list = $("pending");
+  if (!list) return; // the person has opened another chat
+  const scroller = $("view-thread");
+  const following = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 120; // only follow a reader who is already at the bottom
+  paintLive(list);
+  if (following) scroller.scrollTop = scroller.scrollHeight;
 }
 
 // The message shown in place of a chat's messages while they load, or when they could not be loaded.
@@ -265,7 +305,7 @@ function renderThread() {
   if (thread.messages) {
     const last = thread.messages.length - 1;
     nodes = thread.messages.map((m, i) => (m.role === "user" ? userBubble(m) : aiCard(m, i === last)));
-    if (pending === thread) nodes.push(thinkingCard());
+    if (pending?.thread.id === thread.id) nodes.push(aiRow(liveActivity()));
     if (!nodes.length) nodes.push(el("p", "No questions in this chat yet. Ask the first one below.", { className: "history-empty" }));
   } else {
     nodes = [loadingCard(thread)];
@@ -302,7 +342,7 @@ async function ask(question) {
     currentId = lastId = thread.id;
   }
   thread.messages.push({ role: "user", text: question, at: Date.now() });
-  pending = thread;
+  pending = { thread, lines: [], label: "Sending your question…" };
   $("question").value = "";
   $("follow-up-input").value = "";
   setView("thread");
@@ -310,12 +350,9 @@ async function ask(question) {
   renderHistory();
 
   const started = performance.now();
-  const reply = await call(`/api/conversations/${thread.id}/messages`, {
-    method: "POST",
-    headers: JSON_HEADERS,
-    body: JSON.stringify({ question }),
-  });
+  const reply = await stream(`/api/conversations/${thread.id}/messages/stream`, { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ question }) }, showStep);
   const ms = Math.round(performance.now() - started);
+  const steps = pending.lines;
   pending = null;
   setSending(false);
   if (reply.status === 404) return gone(thread);
@@ -327,7 +364,7 @@ async function ask(question) {
     thread.updated = Date.now();
     threads = [thread, ...threads.filter((t) => t !== thread)]; // the chat just used goes to the top
   } else {
-    thread.messages.push({ role: "ai", ms, error: true, question, text: problem(reply) });
+    thread.messages.push({ role: "ai", ms, error: true, question, text: problem(reply), trace: steps }); // the steps that did run show how far it got
   }
   $("status").textContent = reply.ok ? `Answer ready. Answered from: ${PATHS[reply.body.source_used] ?? reply.body.source_used}.` : "The question could not be answered.";
   if (currentId === thread.id) renderThread();

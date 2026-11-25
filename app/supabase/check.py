@@ -135,7 +135,7 @@ def saved_chats(ids: list[str], tokens: list[str]) -> None:
     from fastapi.testclient import TestClient
 
     from app import audit
-    from app.api import conversations
+    from app.api import conversations, limits
 
     (a, _), (ta, tb) = ids, tokens
     settings, asked = get_settings(), []
@@ -153,7 +153,10 @@ def saved_chats(ids: list[str], tokens: list[str]) -> None:
     mini.include_router(conversations.router, prefix="/api")
     web, as_a, as_b = TestClient(mini), {"Authorization": f"Bearer {ta}"}, {"Authorization": f"Bearer {tb}"}
     first_question = "How do I connect to the company VPN from home?"
-    with tempfile.TemporaryDirectory() as folder, mock.patch("app.api.chat.ask", stand_in), mock.patch.object(settings, "audit_db", Path(folder) / "audit.db"):
+    # Three questions a minute, whatever .env says, so the fourth one below runs into the limit.
+    with tempfile.TemporaryDirectory() as folder, mock.patch("app.api.chat.ask", stand_in), mock.patch.multiple(settings, audit_db=Path(folder) / "audit.db", rate_limit_per_minute=3, rate_limit_per_day=0):
+        limits.questions.reset()
+        limits.calls.reset()
         made = web.post("/api/conversations", headers=as_a)
         if not step(made.status_code == 201 and made.json().get("title") == "New chat", "A creates a chat: POST /api/conversations", f"HTTP {made.status_code}: {made.text[:120]}"):
             return
@@ -188,6 +191,13 @@ def saved_chats(ids: list[str], tokens: list[str]) -> None:
 
         rows = audit.recent()
         step(len(rows) == 3 and all(r["user_id"] == a and r["conversation_id"] == cid for r in rows), "the audit log has A's 3 questions with A's id and the chat id, and nothing for B (a temporary file)")
+
+        over = web.post(f"{base}/messages", headers=as_a, json={"question": "One question more than the limit"})
+        step(over.status_code == 429 and over.headers.get("retry-after", "").isdigit() and len(asked) == 3, "A's 4th question in a minute is refused: 429 with Retry-After, and the agent is never called", f"HTTP {over.status_code}: {over.text[:120]}")
+        b_chat = web.post("/api/conversations", headers=as_b)
+        b_reply = web.post(f"/api/conversations/{b_chat.json()['id']}/messages", headers=as_b, json={"question": "B asks while A is out of questions"}) if b_chat.status_code == 201 else b_chat
+        step(b_reply.status_code == 200 and len(asked) == 4, "B can still ask: each person is counted on their own, by the user id in their real login token", f"HTTP {b_reply.status_code}: {b_reply.text[:120]}")
+        step(web.get("/api/conversations", headers=as_a).status_code == 200 and web.get(f"{base}/messages", headers=as_a).status_code == 200, "A can still read and manage chats while out of questions")
         step(web.delete(base, headers=as_a).status_code == 204 and web.get("/api/conversations", headers=as_a).json() == [], "A deletes the chat: DELETE answers 204")
         left = request("GET", "/rest/v1/messages", key=settings.supabase_secret_key, params={"conversation_id": f"eq.{cid}"})
         step(left.status_code == 200 and left.json() == [], "its messages are gone too (looked at with the secret key)")

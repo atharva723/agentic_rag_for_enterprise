@@ -1,8 +1,26 @@
 # IT Support Agentic RAG Copilot
 
-An IT help assistant for employees. It answers from the company's private knowledge base first. It checks whether that evidence is good enough, and uses web search only when it is not. Every answer shows the path it took.
+An IT help assistant for employees. It answers from the company's private knowledge base (KB) first. It checks whether that evidence is good enough, and uses web search only when it is not. Every answer shows the path it took.
 
-Built with LangGraph, FastAPI, Pinecone, Groq and Tavily.
+Built with LangGraph, FastAPI, Pinecone, Groq, Tavily and Supabase.
+
+## How the pieces fit
+
+```
+Browser pages (ui/)
+   |  a question goes up; the steps and the answer come back live
+   v
+Web server: FastAPI (app/api/)      checks the sign-in and the question limit first
+   |-- Supabase (app/supabase/)     accounts and each person's saved chats
+   |-- SQLite file (app/audit.py)   a log of every question and the path it took
+   v
+Agent: LangGraph (app/agent/)
+   |-- Pinecone (app/rag/)          the company documents, found by meaning
+   |-- Tavily (app/tools/)          public web search, only when the documents fall short
+   '-- Groq (app/agent/llm.py)      the language models that route, grade and write
+```
+
+Staff add documents on the Vault page. It calls `POST /api/ingest`, which cuts the file into chunks and stores them in Pinecone (`app/rag/`).
 
 ## How one question flows
 
@@ -25,35 +43,48 @@ Question
 
 **Follow-ups.** The agent keeps nothing between questions. For a saved chat, the server loads the chat's last few question-and-answer pairs from the database and hands them to the agent with the new question (`MEMORY_TURNS`, 3 by default). The router uses them only to restate a follow-up as a complete question ("what if it keeps dropping?" becomes "what should I do if the VPN keeps dropping?"), and every later step works on that. Evidence is always searched fresh.
 
+**Live steps.** The chat page does not wait in silence. While the agent works, it shows each step as it happens ("Searching the company documents…", then "Not enough in the company documents, searching the public web…"). When the answer is ready, the steps fold into one line above the answer ("Searched company documents · 4 steps · 6.3s ›") that opens to the full decision path. The page calls `POST /api/conversations/{id}/messages/stream`, and the server sends each step down the open connection as it happens (Server-Sent Events: one-way live updates over a normal web connection). How the agent reports its steps is in `app/agent/README.md`.
+
+## Words used in this repo
+
+- **KB (knowledge base)** - the company's IT documents (`data/kb/`), cut into chunks and stored in Pinecone. Chat reads only from Pinecone.
+- **Chunk** - a small piece of a document (about 900 characters) that is stored and searched on its own.
+- **Step** - one small function of the agent: route, search, grade, rewrite or answer. LangGraph calls these nodes.
+- **Grade** - the check "is this evidence good enough to answer from?". The result is `good` or `weak`.
+- **Decision path (trace)** - the lines the steps write about what they did. The chat page shows them above each answer.
+- **Fallback** - the honest "I could not confirm this" answer, used when the evidence stays weak.
+- **Vault** - the staff page for adding documents to the KB.
+
 ## Project map
 
-- `app/` - all Python code. Start reading at `app/agent/graph.py`.
-- `supabase/` - the database side of accounts and saved chats (SQL only): the two tables and the rules that keep each user's chats private. People sign in with email and password, and their chats are saved on the server, one list per user. Set-up steps are in `supabase/README.md`.
-- `ui/` - the web pages (plain HTML, CSS and JavaScript, no build step): a landing page, the login page, the chat (a list of your saved chats), the Knowledge Vault (staff uploads) and Settings (staff key, service status, recent questions).
-- `data/` - the knowledge base documents (`data/kb/`). Uploads and the audit log appear here when the app runs.
-- `tests/` - tests. They need no API keys.
+- [`app/`](app/README.md) - all Python code. Start reading at `app/agent/graph.py`.
+- [`supabase/`](supabase/README.md) - the database side of accounts and saved chats (SQL only): the two tables and the rules that keep each user's chats private. People sign in with email and password, and their chats are saved on the server, one list per user. Set-up steps are in `supabase/README.md`.
+- [`ui/`](ui/README.md) - the web pages (plain HTML, CSS and JavaScript, no build step): a landing page, the login page, the chat (a list of your saved chats), the Knowledge Vault (staff uploads) and Settings (staff key, service status, recent questions).
+- [`data/`](data/README.md) - the knowledge base documents (`data/kb/`). Uploads and the audit log appear here when the app runs.
+- [`tests/`](tests/README.md) - tests. They need no API keys.
 - `BRD/` - the customer's problem statement (PDF), the architecture picture and the prototype notebook.
-- `docs/` - our own notes: the prompts that made the knowledge base.
-- `notebooks/` - empty for now: a place for experiments.
-- Root files: `requirements.txt`, `.env.example`, `Dockerfile`, `pytest.ini`.
+- [`docs/`](docs/README.md) - our own notes: the prompts that made the knowledge base.
+- `design assessts/` - the original pictures that the stickers in `ui/assets/` were made from. The app does not read this folder.
+- [`notebooks/`](notebooks/README.md) - empty for now: a place for experiments.
+- Root files: `requirements.txt`, `.env.example`, `Dockerfile`, `pytest.ini`, and the usual `.gitignore`, `.gitattributes` and `.dockerignore`.
 
-Every folder has its own short README.
+Every code folder has its own short README. The folders without one are `BRD/` and `design assessts/` (the customer's files and the picture sources), `ui/assets/` (only images) and `data/kb/` (on purpose: see `data/README.md`).
 
 ## Run it
 
-You need Python 3.11 or newer (tested on 3.11).
+You need Python 3.11 or newer (tested on 3.11) and free accounts at Pinecone, Tavily, Groq and Supabase (each step below says where). Sign-up emails also need an email service such as Mailjet (step 8).
 
 1. Make an isolated environment that has its own Python: `python -m venv .venv`, then activate it. Using conda instead? See the box below.
 2. `pip install -r requirements.txt` (the first install is big: it includes PyTorch for the embedding model).
 3. Copy `.env.example` to `.env` and add your keys there. The app reads only `.env`. Never put real keys in `.env.example`.
 4. Make a free Pinecone account and key (steps in `app/rag/README.md`), then load the knowledge base: `python -m app.rag.ingest`
 5. Check it: `python -m app.rag.store "How do I connect to the VPN from home?"`
-6. Check web search (uses 1 free Tavily credit): `python -m app.tools.web_search "latest Microsoft Teams outage"`
+6. Make a free Tavily key (steps in `app/tools/README.md`) and put it in `.env` as `TAVILY_API_KEY=...`. Then check web search (it uses 1 free credit): `python -m app.tools.web_search "latest Microsoft Teams outage"`
 7. Make a free Groq key at https://console.groq.com and put it in `.env` as `GROQ_API_KEY=...`
 8. Set up accounts (free): make a Supabase project, run `supabase/schema.sql`, put the keys in `.env`, and set the site address and the email service, all in `supabase/README.md`. Then `python -m app.supabase.check --full` proves it works (no AI tokens spent). The chat needs a sign-in, so without this step it says "Accounts are not set up".
 9. `uvicorn app.main:app --reload`, then open http://127.0.0.1:8000. That is the landing page: click **Open the Chat**, create an account (or sign in), and ask a question. The server is ready at once and loads the embedding model in the background, so a question asked in the first half minute may wait a little.
 10. Staff tools: the **Knowledge Vault** page (`/vault.html`, upload documents) and the **Settings** page (`/settings.html`, check the key and see the recent questions) stay locked until you set `ADMIN_API_KEY` in `.env`. Make a key with `python -c "import secrets; print(secrets.token_urlsafe(32))"`, paste it in `.env`, restart the app, then paste the same key on either page. Employees never need it, and staff pages do not need a sign-in.
-11. `pytest` (uses no keys and no tokens)
+11. `pytest` (uses no keys and no tokens). A few checks of the page's live-reply code run under Node.js and are skipped if Node.js is not installed.
 12. Optional, with the real services: `python -m tests.run_eval` asks a sample of 10 questions and reports the path, the sources and the tokens used (about 30,000 Groq tokens, roughly 8% of one day's free budget). `python -m tests.run_eval --followups` does the same for 11 follow-up questions that come with the earlier messages of their chat (about 35,000 tokens).
 
 **Using conda?** Create the env with Python in it, and switch off the shared "user" packages (a conda env still sees the ones in `AppData\Roaming\Python`, and they win over the env's own):
@@ -76,12 +107,18 @@ docker build -t it-support-copilot .
 docker run --env-file .env -p 8000:8000 it-support-copilot
 ```
 
-The keys come from `.env` at run time and are never copied into the image. The image uses CPU-only PyTorch. The model downloads on the first start. The audit log and uploads live inside the container, so they disappear when the container is removed: mount a volume on `/app/data` to keep them. This Dockerfile has not been test-built yet, so build it once before relying on it.
+- The keys come from `.env` at run time and are never copied into the image. The image uses CPU-only PyTorch, and the model downloads on the first start.
+- The audit log and uploads live inside the container, so they disappear when the container is removed: mount a volume on `/app/data` to keep them.
+- When the container is stopped, the app waits up to 30 seconds for an answer that is still being made, but `docker stop` kills the container after 10 seconds unless you give it longer (`docker stop -t 40`).
+- This Dockerfile has not been test-built yet, so build it once before relying on it.
 
 ## Troubleshooting
 
 - The page looks old or broken after an update: press Ctrl+F5 once. The server now tells browsers to re-check the page files, but a copy cached earlier can linger.
 - The icons show as words (`add_circle`, `folder_open`) and the fonts look plain: the pages load their fonts and icons from Google Fonts, so the browser must be able to reach `fonts.googleapis.com`. Everything still works without it.
+- A new script, font, image or link on a page does nothing, and the browser console says "violates the following Content Security Policy": the pages may only load their own files, Google Fonts and your Supabase project (`app/headers.py`). Put the file in `ui/`, or add the host to the policy on purpose. `pytest` also checks the pages for inline scripts, event handlers and `<style>` blocks.
+- Chat says "You are asking too fast" or "You have asked N questions in the last 24 hours": the per-person question limit (`RATE_LIMIT_PER_MINUTE` and `RATE_LIMIT_PER_DAY` in `.env`, 0 = no limit). The message says how long to wait. The counters live in the server's memory, so a restart clears them.
+- The steps appear all at once, after the answer, instead of one by one: something between the browser and the server (a proxy, a firewall or an antivirus that scans web traffic) is holding the reply back until it ends. The server already asks for no buffering (`Cache-Control: no-cache, no-transform` and `X-Accel-Buffering: no`). If you put nginx in front, also set `proxy_buffering off;` for `/api/`.
 - The Vault or Settings page says "switched off": `ADMIN_API_KEY` is empty in `.env`. Set it (step 10 above) and restart the app.
 - The chat says "Accounts are not set up": the Supabase keys are missing in `.env`, or `SUPABASE_PUBLISHABLE_KEY` holds a secret key. Follow `supabase/README.md`, then restart the app.
 - Sign-up says "Emails can only go to the project's team members" or "Too many emails were sent": Supabase's built-in email sender is only for testing. Add your own email service (Mailjet steps in `supabase/README.md`), or make the users yourself in the Supabase dashboard under Authentication > Users.
@@ -96,11 +133,16 @@ The keys come from `.env` at run time and are never copied into the image. The i
 - the flow or the retry rules: `app/agent/graph.py`
 - what the LLM is told: `app/agent/prompts.py`
 - what one step does: its file in `app/agent/nodes/`
+- the wording of the live status lines ("Searching the company documents…"): `app/agent/progress.py`. How they travel to the page: `app/api/streaming.py` (server) and `stream()` in `ui/common.js` (page)
 - a new source (tickets, HR docs, SQL): add a file in `app/tools/`
 - file types or chunking: `app/rag/ingest.py`
 - which folder of documents to load: `kb_dir` in `app/config.py` (or pass a folder to the ingest command)
+- which embedding model: `EMBEDDING_MODEL` in `.env`. A model with a different vector size needs a new `PINECONE_INDEX_NAME` and a fresh ingest (see `app/rag/README.md`)
 - a setting: `.env` (the full list is in `app/config.py`)
 - how much of a chat a follow-up remembers: `MEMORY_TURNS` in `.env` (`0` answers every question on its own)
+- how many questions one person may ask: `RATE_LIMIT_PER_MINUTE` and `RATE_LIMIT_PER_DAY` in `.env` (`0` = no limit). The code is `app/ratelimit.py`, and `app/api/limits.py` joins it to the routes
+- how long the audit log is kept: `AUDIT_RETENTION_DAYS` in `.env` (90 by default, `0` keeps everything)
+- what the pages may load and run (the Content-Security-Policy and the other security headers): `app/headers.py`
 - the chat tables or their privacy rules: `supabase/schema.sql` (then run it again in the Supabase SQL Editor)
 - how a login token is checked: `app/supabase/auth.py`. To make a route need a sign-in, add `user: User = Depends(current_user)` (from `app/api/account.py`)
 - how saved chats work: the database calls are in `app/supabase/conversations.py`, the routes in `app/api/conversations.py`
@@ -108,16 +150,27 @@ The keys come from `.env` at run time and are never copied into the image. The i
 
 ## Status
 
-All the MVP parts work: settings, the knowledge base (`app/rag/`), web search (`app/tools/`), the agent (`app/agent/`), the API, the audit log (SQLite, with a viewer on the Settings page), the web pages and the tests. `pytest` passes without any key. `python -m tests.run_eval` checks the real thing.
+All the MVP parts work: settings, the knowledge base (`app/rag/`), web search (`app/tools/`), the agent (`app/agent/`), accounts and saved chats (`app/supabase/`), the API, the audit log (SQLite, with a viewer on the Settings page), the web pages and the tests. `pytest` passes without any key. `python -m tests.run_eval` and `python -m app.supabase.check --full` check the real services.
 
-Known limits:
+### Known limits
+
 - A question that needs facts from three different documents may only get part of them. The agent then says so, or falls back and says what it could not confirm.
 - Web answers are only as good as what the search finds, and the results change from day to day. The search cannot show live status, only what pages said when they were saved. For a "now" or "latest" question, the answer gets a "Heads up" line if even the newest page is more than a week old.
 - No checker can tell look-alike names apart (a test accepted a page about "NovaERA" for "NovaERP"). That is why the router keeps passwords, tickets, people, stores and equipment questions away from the web. This guard is a model's judgement, not a guarantee: keep the answer prompt's rule that credentials are never written out.
 - The free Groq plan allows about 3,000 tokens per question from the knowledge base and 4,000 to 5,000 with web search, so roughly 60 to 90 questions a day (each model has its own 200,000-token daily limit).
-- The chat page shows plain text. People sign in with a Supabase account (email and password; a forgot-password link is not built yet). Staff use one shared admin key, which travels in a header, so put the app behind HTTPS before real use.
-- Chats are saved on the server, one list per user, so they follow a person to another browser or computer. Chats made in a browser before accounts existed stay in that browser, are not shown, and can be removed on the Settings page. The Vault's upload list is still saved in each browser only. The server has no "list documents" or "delete document" call yet: the Vault list is that browser's own upload history, and its Remove button only edits the list. It never deletes anything from the knowledge base.
-- Follow-ups work because the server loads the chat's earlier questions and answers from the database with each new question, so they survive a new sign-in, another browser and a restart. The agent reads only the last `MEMORY_TURNS` of them, cut short. A new chat starts fresh. A follow-up that changes topic is searched as a new question.
+- The chat page shows plain text, and only the steps are live: the words of the answer still arrive all at once, when it is complete.
+- If the connection drops while an answer is being made, the server still finishes and saves it (and a server that is stopped meanwhile waits up to 30 seconds for it). But the page says no reply came back: reload the chat to see it. Try again would ask twice.
+- People sign in with a Supabase account (email and password). A forgot-password link is not built yet.
+- Staff use one shared admin key, which travels in a header, so put the app behind HTTPS before real use.
+- The Vault's upload list is saved in each browser only. The server has no "list documents" or "delete document" call yet: the Vault list is that browser's own upload history, and its Remove button only edits the list. It never deletes anything from the knowledge base.
+- Chats made in a browser before accounts existed stay in that browser, are not shown, and can be removed on the Settings page.
 - The pages load fonts and icons from Google Fonts. On a network that blocks it, icons show as words and the look is plainer. Everything still works.
-- Every question needs a sign-in, but sign-ups are open and each question spends free Groq tokens. There is no per-user rate limit yet (it is planned next). Add the limit, and keep the app inside the company network, before a production rollout.
-- The audit log keeps every question as typed, with no clean-up. For a question asked in a saved chat it also records who asked (the user id) and in which chat. Treat it as private, and trim it from time to time.
+- Every question needs a sign-in, and each person has a question limit (5 a minute and 20 in any 24 hours by default), because every question spends free Groq tokens. The limit counts in the server's memory: a restart clears it, and several server processes would each count on their own. That is fine for the single process this app runs as.
+- Sign-ups are open (Supabase's own limits and email confirmation are the only guard), so keep the app inside the company network before a production rollout. A request without a sign-in is refused with 401 before it costs anything, but there is no limit on those.
+
+### How some things work
+
+- Chats are saved on the server, one list per user, so they follow a person to another browser or computer.
+- Follow-ups work because the server loads the chat's earlier questions and answers from the database with each new question, so they survive a new sign-in, another browser and a restart. The agent reads only the last `MEMORY_TURNS` of them, cut short. A new chat starts fresh. A follow-up that changes topic is searched as a new question.
+- Pages are served with a strict Content-Security-Policy (our own files, Google Fonts and the Supabase project only), plus `nosniff`, no-referrer and anti-framing headers (`app/headers.py`). Inline `style="..."` attributes are allowed because the landing, Vault and Settings pages use a few. There is no HSTS header: that belongs on the HTTPS proxy you put in front.
+- The audit log keeps every question as typed. For a question asked in a saved chat it also records who asked (the user id) and in which chat. Rows older than `AUDIT_RETENTION_DAYS` (90 days by default) are deleted when the server starts and each time a question is saved. Deleting a chat does not delete its audit rows: they expire with the rest. Treat the file as private.

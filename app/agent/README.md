@@ -2,7 +2,8 @@
 
 The brain. One question goes in, one answer comes out.
 
-- `graph.py` - the whole flow on one screen: the steps, and the rules for what runs next. Start here. `ask(question, history)` is the entry point (`history` = the earlier exchanges of the same chat, optional). It also reports (and logs) the LLM tokens each question used.
+- `graph.py` - the whole flow on one screen: the steps, and the rules for what runs next. Start here. `ask(question, history, on_step)` is the entry point. `history` is the earlier exchanges of the same chat (optional). `on_step` is a function that is told as each step starts and ends, so a page can show the path live (optional, see "Live steps" below). `ask` also reports (and logs) the LLM tokens each question used.
+- `progress.py` - the plain-words status line for each step while it runs ("Searching the company documents…", "Not enough in the company documents, searching the public web…"), and the shape of the two events `on_step` gets. This is the file to edit to change that wording.
 - `state.py` - the shared notes every step reads and writes (question, evidence, grade, answer, decision path), and the shape of each LLM decision.
 - `memory.py` - short-term memory: keeps the last few exchanges of one chat (`MEMORY_TURNS`), each cut short. Nothing is stored.
 - `prompts.py` - every instruction we send to the LLM, and how evidence and earlier messages are shown to it.
@@ -13,7 +14,7 @@ The flow: route the question, search the KB, grade the evidence. If it is weak, 
 
 ## Follow-ups (short-term memory)
 
-A follow-up like "what if it keeps disconnecting?" only makes sense with the chat before it. The agent keeps nothing between questions, so the caller gives it the chat's earlier question-and-answer pairs with each new question: `ask(question, history)`. In a saved chat (`/api/conversations/{id}/messages`) the server loads them from the database, so nobody can invent a chat history. The evaluation script (`tests/run_eval.py --followups`) passes its own.
+A follow-up like "what if it keeps disconnecting?" only makes sense with the chat before it. The agent keeps nothing between questions, so the caller gives it the chat's earlier question-and-answer pairs with each new question: `ask(question, history)`. In a saved chat (`/api/conversations/{id}/messages`, or `.../messages/stream` as the chat page uses) the server loads them from the database, so nobody can invent a chat history. The evaluation script (`tests/run_eval.py --followups`) passes its own.
 
 - `memory.recent()` keeps the last `MEMORY_TURNS` pairs (3 by default) and cuts each text to 300 characters. `MEMORY_TURNS=0` switches memory off.
 - Only the router reads them. It restates the message as a complete question ("The VPN connection keeps dropping after a few hours. Is that normal?"), and writes the search query, the second search and `public` for that restated question. The grader, the rewriter and every answer step work on the restated question too. They never see the earlier messages.
@@ -24,6 +25,15 @@ A follow-up like "what if it keeps disconnecting?" only makes sense with the cha
 - The decision path shows "Follow-up understood as: ..." when the message was restated.
 
 Limits: the router is the small fast model. It sometimes leaves a short follow-up unchanged (it still writes a good search query), and a vague "it" can be read the wrong way. Exchanges older than `MEMORY_TURNS` are forgotten, and a long chat is not summarised.
+
+## Live steps
+
+`ask(question, history, on_step)` can report its progress while it works, so the chat page can show the path as it happens.
+
+- `on_step` gets one small dict when a step starts (with a plain-words `label` from `progress.py`, such as "Searching the company documents…") and one when it ends (with the decision-path `lines` the step wrote).
+- Without `on_step` the graph runs exactly as before. With it, the same run is read step by step from LangGraph's own `tasks` stream, so no step needed any change.
+- A step is announced before it does its work. A step that crashes is never reported as done.
+- A callback that fails only logs a warning. It can never cost the person their answer.
 
 ## Safety rules
 

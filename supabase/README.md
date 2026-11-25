@@ -26,10 +26,11 @@ Email confirmation is on in a new project: a person who creates an account must 
    3. In Supabase: Authentication > SMTP (`https://supabase.com/dashboard/project/_/auth/smtp`). Turn on custom SMTP and fill in: Sender email = the address from step 1, Sender name = `Agentic RAG`, Host = `in-v3.mailjet.com`, Port = `587`, Username = the Mailjet API Key, Password = the Mailjet Secret Key. Save.
    4. Supabase now allows 30 emails an hour. Raise it under Authentication > Rate Limits if you need more.
    5. Try it: create an account in the app with an address you can read, then open the link in the email.
+   6. Check that it is YOUR sender and not Supabase's built-in one: the email must come "From" the address in step 1, not `noreply@mail.app.supabase.io`. Another way: sign up with an address that is not in your Supabase team (for a Gmail inbox, `you+test@gmail.com` works, and the mail still arrives in your inbox). The built-in sender refuses that with "Email address not authorized". If sign-up succeeds, your own SMTP is in use.
 
 The Mailjet keys live only in the Supabase dashboard, never in `.env` or in this repo. Mailjet uses one key pair for both email and its own API, so treat the Secret Key like a password.
 
-The checks and the tests never send an email: `--full` makes its test users through the admin API, already confirmed.
+The checks and the tests never send an email: `--full` makes its test users through the admin API, already confirmed. If a sign-up ever says "Error sending confirmation email", Supabase reached your SMTP settings but Mailjet refused the message: check that the sender address is confirmed in Mailjet, and that the API Key and Secret Key are the right way round.
 
 ## How the server knows who you are
 
@@ -50,7 +51,7 @@ Limits to know:
 
 ## How a saved chat works
 
-1. The page creates a chat (`POST /api/conversations`) and asks in it (`POST /api/conversations/{id}/messages`). The routes are listed in `app/api/README.md`.
+1. The page creates a chat (`POST /api/conversations`) and asks in it (`POST /api/conversations/{id}/messages/stream`, the live version of `.../messages`). The routes are listed in `app/api/README.md`.
 2. The server loads the chat's last few messages from the database, so a follow-up such as "what if it keeps dropping?" makes sense. The page never sends the history, so nobody can invent one. Because it lives in the database, it survives a new sign-in, another browser and a server restart. Each chat has its own history: a new chat starts blank.
 3. The agent answers (see `app/agent/README.md`). The question and the answer are then saved together in one request, and the first question names the chat.
 4. Every database call is made as the signed-in user, so the privacy rules apply to each one. Whether a chat is yours is checked before the agent runs, so someone else's chat costs no AI tokens.
@@ -60,7 +61,8 @@ Good to know:
 - A question is saved only after it was answered. If the page gives up waiting and asks again, the first answer may have been saved after all, so the chat can hold the question twice. Reload the page to see what was saved.
 - The login token is checked when a request arrives. If it runs out while the agent is still working (rare), the answer is shown but not saved.
 - Reading a chat returns its newest 200 messages (500 at most), oldest first.
-- The staff audit log is still a local SQLite file (`data/audit.db`), not part of Supabase. It records the user id and the chat id of every question asked in a saved chat.
+- The staff audit log is still a local SQLite file (`data/audit.db`), not part of Supabase. It records the user id and the chat id of every question asked in a saved chat, and keeps each row for `AUDIT_RETENTION_DAYS` (90 by default).
+- Each person may ask 5 questions a minute and 20 in any 24 hours (`RATE_LIMIT_PER_MINUTE` and `RATE_LIMIT_PER_DAY` in `.env`), counted by their user id. This is counted in the server's memory, not in Supabase. See `app/api/limits.py`.
 
 ## How the privacy rules work
 

@@ -501,3 +501,138 @@ def test_graph_treats_every_question_alone_when_memory_is_off(services, monkeypa
     decisions(services, grades=["good"])
     ask("What if it keeps disconnecting?", EARLIER)
     assert services.prompts[0] == prompts.ROUTER.format(question="What if it keeps disconnecting?")
+
+
+# ---- live progress: on_step ------------------------------------------------------------
+
+
+def watched(services, question="How do I connect to the VPN?", history=None):
+    """Run the graph with on_step. Returns (result, events): every progress event, in the order it arrived."""
+    events = []
+    result = ask(question, history, on_step=events.append)
+    return result, events
+
+
+def test_on_step_tells_each_step_as_it_starts_and_as_it_finishes(services):
+    decisions(services, grades=["good"])
+    services.texts = ["KB answer"]
+    result, events = watched(services)
+    assert [(e["step"], e["status"]) for e in events] == [
+        ("route_question", "start"), ("route_question", "done"),
+        ("retrieve_kb", "start"), ("retrieve_kb", "done"),
+        ("grade_evidence", "start"), ("grade_evidence", "done"),
+        ("generate_answer", "start"), ("generate_answer", "done"),
+    ]  # fmt: skip
+    assert [e["label"] for e in events if e["status"] == "start"] == [
+        "Understanding your question…",
+        "Searching the company documents…",
+        "Checking whether the company documents answer it…",
+        "Writing the answer from the company documents…",
+    ]
+    finished = [line for e in events if e["status"] == "done" for line in e["lines"]]
+    assert finished == result["trace"]  # what the steps said as they finished is exactly the decision path of the answer
+    assert all(set(e) == {"step", "status", "lines"} for e in events if e["status"] == "done")  # the answer text is never in a progress event
+
+
+def test_on_step_does_not_change_the_answer(services):
+    decisions(services, grades=["weak", "good"])
+    services.texts = ["Web answer"]
+    plain = ask("What is the latest Teams outage guidance?")
+    decisions(services, grades=["weak", "good"])
+    services.texts = ["Web answer"]
+    watched_result, _ = watched(services, "What is the latest Teams outage guidance?")
+    for key in ("answer", "source_used", "citations", "trace", "retries", "grade", "query", "route"):
+        assert watched_result[key] == plain[key], key
+    assert set(watched_result) == set(plain)  # the same notes, including the token count
+
+
+def test_a_step_is_announced_before_it_does_its_work(services, monkeypatch):
+    """The page shows "Searching the company documents…" while the search runs. That only works if the start comes first.
+    (LangGraph's "tasks" stream sends it first today. This test fails if an upgrade ever delays it until the step is over.)"""
+    order = []
+    monkeypatch.setattr(store, "search", lambda query: order.append("the search runs") or [kb_doc()])
+    decisions(services, grades=["good"])
+    services.texts = ["KB answer"]
+    ask("How do I connect to the VPN?", on_step=lambda e: order.append(f"{e['status']} {e['step']}"))
+    assert order[2:5] == ["start retrieve_kb", "the search runs", "done retrieve_kb"]
+
+
+def test_on_step_labels_say_which_kind_of_search_and_grading_this_is(services):
+    decisions(services, grades=["weak", "good"])
+    services.texts = ["Web answer"]
+    _, events = watched(services, "What is the latest Teams outage guidance?")
+    labels = [(e["step"], e["label"]) for e in events if e["status"] == "start"]
+    assert labels[3:] == [
+        ("search_web", "Not enough in the company documents, searching the public web…"),
+        ("grade_evidence", "Checking whether the web results are good enough…"),
+        ("generate_answer", "Writing the answer from the web results…"),
+    ]
+
+
+def test_on_step_says_when_a_search_is_run_again_after_a_rewrite(services):
+    decisions(services, grades=["weak", "weak", "good"], rewrite="better query")
+    services.texts = ["KB answer after the rewrite"]
+    _, events = watched(services, "a vague question")
+    labels = [(e["step"], e["label"]) for e in events if e["status"] == "start"]
+    assert ("rewrite_query", "Still not enough, rewriting the question to search again…") in labels
+    assert [label for step, label in labels if step == "retrieve_kb"] == [
+        "Searching the company documents…",
+        "Searching the company documents again with the new wording…",
+    ]
+
+
+def test_on_step_covers_small_talk_and_the_fallback(services):
+    decisions(services, route="direct")
+    services.texts = ["Hello!"]
+    _, events = watched(services, "Hello!")
+    assert [(e["step"], e["label"]) for e in events if e["status"] == "start"] == [
+        ("route_question", "Understanding your question…"),
+        ("answer_direct", "Writing a reply…"),
+    ]
+    decisions(services, grades=["weak", "weak", "weak", "weak"])
+    services.texts = ["Contact the Service Desk."]
+    _, events = watched(services, "What is the admin password of store 12?")
+    assert events[-2] == {"step": "fallback_answer", "status": "start", "label": "Nothing could be confirmed, writing a careful answer…"}
+    assert events[-1] == {"step": "fallback_answer", "status": "done", "lines": ["Fallback answer: not enough evidence"]}
+
+
+def test_a_follow_up_reports_both_lines_the_router_wrote(services):
+    services.decisions[FollowUpDecision] = [restated()]
+    services.decisions[EvidenceGrade] = [EvidenceGrade(grade="good")]
+    services.texts = ["Sessions end after 12 hours."]
+    _, events = watched(services, "What if it keeps disconnecting?", EARLIER)
+    assert events[1] == {
+        "step": "route_question",
+        "status": "done",
+        "lines": [f"Follow-up understood as: {DROPPING}", "Router → KB (search: VPN disconnecting)"],
+    }
+
+
+def test_a_failing_progress_callback_never_costs_the_answer(services, caplog):
+    decisions(services, grades=["good"])
+    services.texts = ["KB answer"]
+
+    def broken(event):
+        raise RuntimeError("the page closed")
+
+    result = ask("How do I connect to the VPN?", on_step=broken)
+    assert result["answer"] == "KB answer" and result["source_used"] == "private_kb"
+    assert "Progress callback failed, carrying on: the page closed" in caplog.text
+
+
+def test_a_step_that_crashes_still_raises_when_watched(services, monkeypatch):
+    """Watching must not hide a real failure: the caller has to see it to answer 'busy' or 'something went wrong'."""
+
+    class Busy(Exception):
+        status_code = 429
+
+    def busy(query):
+        raise Busy("tokens per day limit reached")
+
+    monkeypatch.setattr(store, "search", busy)
+    decisions(services)
+    events = []
+    with pytest.raises(Busy):
+        ask("How do I connect to the VPN?", on_step=events.append)
+    assert [(e["step"], e["status"]) for e in events] == [("route_question", "start"), ("route_question", "done"), ("retrieve_kb", "start")]
+    # ...and it is never reported as done: the page would show a finished step that never finished

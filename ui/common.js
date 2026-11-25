@@ -25,19 +25,85 @@ const icon = (name, size = "") => {
 const setBusy = (selector, busy) => document.querySelectorAll(selector).forEach((b) => b.setAttribute("aria-disabled", String(busy)));
 const isBusy = (selector) => document.querySelector(selector)?.getAttribute("aria-disabled") === "true";
 
-// Talk to the server. It never throws: a failure comes back as { ok: false, status: 0 }.
 // On a page with sign-in (auth.js), our own /api/ calls carry the person's token, and a 401 sends them back to sign in.
+async function authedFetch(url, options, timeout) {
+  const withAuth = typeof Auth !== "undefined" && url.startsWith("/api/");
+  const headers = new Headers(options.headers);
+  const token = withAuth ? await Auth.token() : "";
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const res = await fetch(url, { ...options, headers, signal: AbortSignal.timeout?.(timeout) });
+  if (withAuth && res.status === 401) Auth.expired();
+  return res;
+}
+
+// Talk to the server. It never throws: a failure comes back as { ok: false, status: 0 }.
 async function call(url, options = {}, timeout = CHAT_TIMEOUT_MS) {
   try {
-    const withAuth = typeof Auth !== "undefined" && url.startsWith("/api/");
-    const headers = new Headers(options.headers);
-    const token = withAuth ? await Auth.token() : "";
-    if (token) headers.set("Authorization", `Bearer ${token}`);
-    const res = await fetch(url, { ...options, headers, signal: AbortSignal.timeout?.(timeout) });
-    if (withAuth && res.status === 401) Auth.expired();
+    const res = await authedFetch(url, options, timeout);
     return { ok: res.ok, status: res.status, body: await res.json().catch(() => ({})) };
   } catch {
     return { ok: false, status: 0, body: {} };
+  }
+}
+
+// The same, for a reply that arrives as server-sent events. Each "step" event goes to onStep the moment it arrives. The closing
+// "answer" or "error" event becomes the result, shaped like call()'s. An error before the stream starts (401, 404, 429) is a normal reply.
+async function stream(url, options, onStep, timeout = CHAT_TIMEOUT_MS) {
+  let result = { ok: false, status: 0, body: {} }; // what a connection that breaks before the end looks like
+  try {
+    const res = await authedFetch(url, options, timeout);
+    if (!res.ok) return { ok: false, status: res.status, body: await res.json().catch(() => ({})) };
+    for await (const { name, data } of readEvents(res.body)) {
+      if (name === "step") {
+        try {
+          onStep(data);
+        } catch (error) {
+          console.error(error); // a drawing problem must not cost the answer
+        }
+      } else if (name === "answer") result = { ok: true, status: 200, body: data };
+      else if (name === "error") result = { ok: false, status: data.status ?? 500, body: { detail: data.detail } };
+    }
+  } catch {
+    /* the connection broke or ran out of time: whatever arrived before is the result */
+  }
+  return result;
+}
+
+// Server-sent events are text: an event is a few "field: value" lines ended by a blank line, and a line that starts with ":" is only a
+// keep-alive. A chunk can end anywhere, even inside a character, so text waits in a buffer until a blank line completes an event.
+async function* readEvents(body) {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let text = "";
+  try {
+    for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) {
+      text = (text + decoder.decode(chunk.value, { stream: true })).replace(/\r\n/g, "\n");
+      for (let end = text.indexOf("\n\n"); end !== -1; end = text.indexOf("\n\n")) {
+        const event = parseEvent(text.slice(0, end));
+        text = text.slice(end + 2);
+        if (event) yield event;
+      }
+    }
+  } finally {
+    reader.cancel().catch(() => {});
+  }
+}
+
+function parseEvent(block) {
+  let name = "message";
+  const data = [];
+  for (const line of block.split("\n")) {
+    if (line.startsWith(":")) continue;
+    const colon = line.indexOf(":");
+    const field = colon === -1 ? line : line.slice(0, colon);
+    const value = colon === -1 ? "" : line.slice(colon + 1).replace(/^ /, "");
+    if (field === "event") name = value;
+    else if (field === "data") data.push(value);
+  }
+  try {
+    return data.length ? { name, data: JSON.parse(data.join("\n")) } : null;
+  } catch {
+    return null;
   }
 }
 

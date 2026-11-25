@@ -35,6 +35,8 @@ file -> ingest.py: load_file -> chunk -> ingest_file -> store.add_chunks -> Pine
 - Subfolders are read too, so `batch-1/` to `batch-5/` can stay as they are. Only the file name matters: it is the `source` and part of every id. Two files with the same name are refused.
 - Staff uploads from the Knowledge Vault page are saved in `data/uploads/` and go through the same `ingest_file`.
 
+## Index and namespace
+
 - The **index** is the database (`PINECONE_INDEX_NAME`). Its vector size is fixed when it is created.
 - A **namespace** is a folder inside the index (`PINECONE_NAMESPACE`). The first upload creates it.
 - Ingest and chat must use the same pair, or chat finds nothing. Set them in `.env` only. The defaults in `app/config.py` are a fallback, and `.env` always wins.
@@ -43,6 +45,6 @@ file -> ingest.py: load_file -> chunk -> ingest_file -> store.add_chunks -> Pine
 
 `BAAI/bge-small-en-v1.5`: free, runs on your computer, makes 384 numbers per vector, reads up to 512 tokens. On our 22 answerable test questions it ranked the right document first more often than `all-MiniLM-L6-v2` (95% vs 86%). The bigger `bge-base` (768 numbers) did not do better.
 
-The index size must match the model. `store.py` checks this and stops with advice if it doesn't. It never deletes an index, and new indexes are created with deletion protection on. To change the model, set a new `PINECONE_INDEX_NAME` and ingest again.
+The index size must match the model. `store.py` checks this and stops with advice if it doesn't. It never deletes an index, and new indexes are created with deletion protection on. To change the model, set `EMBEDDING_MODEL` and a new `PINECONE_INDEX_NAME` in `.env`, then ingest again.
 
 Free plan limits: 5 indexes, 100 namespaces per index, 2 GB, AWS `us-east-1` only.
