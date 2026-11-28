@@ -3,6 +3,7 @@
 // messages by itself, so a follow-up only needs the new question.
 
 const TRACE_KEY = "rag.showTrace";
+const WEB_KEY = "rag.webSearch";
 const JSON_HEADERS = { "Content-Type": "application/json" };
 const VERDICTS = {
   private_kb: (n) => ["verified", `Grounded in ${plural(n, "company document")}`],
@@ -22,6 +23,7 @@ let threads = []; // this person's chats, newest first: { id, title, updated, me
 let currentId = null; // null means the new-chat view
 let lastId = null;
 let busy = false; // a request that changes things is running
+let webOn = false; // the person turned web search on: the question may use the public web even when it looks company-only
 let pending = null; // the question being answered: { thread, lines: the steps done so far, label: what is running now }
 let listError = ""; // why the list of chats could not be loaded
 
@@ -350,7 +352,7 @@ async function ask(question) {
   renderHistory();
 
   const started = performance.now();
-  const reply = await stream(`/api/conversations/${thread.id}/messages/stream`, { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ question }) }, showStep);
+  const reply = await stream(`/api/conversations/${thread.id}/messages/stream`, { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ question, web: webOn }) }, showStep);
   const ms = Math.round(performance.now() - started);
   const steps = pending.lines;
   pending = null;
@@ -431,6 +433,15 @@ function setTrace(show) {
 }
 $("trace-toggle").addEventListener("click", () => setTrace(document.body.classList.contains("hide-trace")));
 setTrace(load(TRACE_KEY, true));
+
+// Web search: one setting, shown on both buttons (the new-chat box and the follow-up bar). It is sent with each question. Off until the person turns it on.
+function setWeb(on) {
+  webOn = on;
+  document.querySelectorAll(".web-toggle").forEach((button) => button.setAttribute("aria-pressed", String(on)));
+  save(WEB_KEY, on);
+}
+document.querySelectorAll(".web-toggle").forEach((button) => button.addEventListener("click", () => setWeb(!webOn)));
+setWeb(load(WEB_KEY, false) === true);
 
 // ---- rename and delete (the buttons in the chat's header) ----
 

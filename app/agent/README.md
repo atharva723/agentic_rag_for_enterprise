@@ -2,7 +2,7 @@
 
 The brain. One question goes in, one answer comes out.
 
-- `graph.py` - the whole flow on one screen: the steps, and the rules for what runs next. Start here. `ask(question, history, on_step)` is the entry point. `history` is the earlier exchanges of the same chat (optional). `on_step` is a function that is told as each step starts and ends, so a page can show the path live (optional, see "Live steps" below). `ask` also reports (and logs) the LLM tokens each question used.
+- `graph.py` - the whole flow on one screen: the steps, and the rules for what runs next. Start here. `ask(question, history, on_step, web)` is the entry point. `history` is the earlier exchanges of the same chat (optional). `on_step` is a function that is told as each step starts and ends, so a page can show the path live (optional, see "Live steps" below). `web` is True when the person turned Web search on for this question (optional, see "Web search switch" below). `ask` also reports (and logs) the LLM tokens each question used.
 - `progress.py` - the plain-words status line for each step while it runs ("Searching the company documents…", "Not enough in the company documents, searching the public web…"), and the shape of the two events `on_step` gets. This is the file to edit to change that wording.
 - `state.py` - the shared notes every step reads and writes (question, evidence, grade, answer, decision path), and the shape of each LLM decision.
 - `memory.py` - short-term memory: keeps the last few exchanges of one chat (`MEMORY_TURNS`), each cut short. Nothing is stored.
@@ -20,7 +20,7 @@ A follow-up like "what if it keeps disconnecting?" only makes sense with the cha
 - Only the router reads them. It restates the message as a complete question ("The VPN connection keeps dropping after a few hours. Is that normal?"), and writes the search query, the second search and `public` for that restated question. The grader, the rewriter and every answer step work on the restated question too. They never see the earlier messages.
 - Earlier messages are background, never facts. The router prompt says so, and every answer still comes only from evidence found for this question.
 - A new topic is left alone: after a VPN chat, "how long does a loaner laptop take?" is searched as the laptop question only. A "thanks" still gets a direct reply.
-- The safety rules run again for every message, on the restated question. After a public topic, "what is the admin password for our office router?" is still company-only and never reaches the web.
+- The safety rules run again for every message, on the restated question. After a public topic, "what is the admin password for our office router?" is still company-only and does not reach the web (unless the person turned Web search on).
 - A chat's first message has no history, so it is routed exactly as before: same prompt, same decision shape. If the router's reply cannot be read, the message is searched as typed, with no web search.
 - The decision path shows "Follow-up understood as: ..." when the message was restated.
 
@@ -35,9 +35,18 @@ Limits: the router is the small fast model. It sometimes leaves a short follow-u
 - A step is announced before it does its work. A step that crashes is never reported as done.
 - A callback that fails only logs a warning. It can never cost the person their answer.
 
+## Web search switch
+
+Normally the router alone decides whether the web may be used (`public`). The chat page's **Web search** button adds the person's own choice.
+
+- `ask(..., web=True)` puts `web_allowed` in the notes. The router then sets `public` to True for a knowledge-base question it judged company-only, and adds "Web search turned on by you" to the decision path.
+- Everything else stays the same: the KB is searched first, the web is used only if that evidence is weak, and the search text is the router's cleaned query (no names, emails or secrets).
+- It never applies to small talk (nothing is searched). It also never applies when the router's reply was unreadable: the query is then the question as typed, not cleaned, so it stays off the network.
+- Credentials are still never written out, and a page about a look-alike product is still graded weak.
+
 ## Safety rules
 
-- **Company-only questions never go to the web.** The router decides if public web pages could answer the question at all (`public`). Passwords, tickets, people and equipment are company-only. For those, a weak KB answer leads to one retry on the KB and then the fallback. This rule exists because a live test showed the web returning a stranger's default admin password for a look-alike product name. The grader alone cannot reliably tell look-alike names apart.
+- **Company-only questions do not go to the web.** The router decides if public web pages could answer the question at all (`public`). Passwords, tickets, people and equipment are company-only. For those, a weak KB answer leads to one retry on the KB and then the fallback. This rule exists because a live test showed the web returning a stranger's default admin password for a look-alike product name. The grader alone cannot reliably tell look-alike names apart. The one way around it is the person's own choice: the Web search button (see above).
 - **Credentials are never written out.** The answer prompt forbids passwords, keys and tokens, even if the evidence contains one. The fallback never states company facts.
 - **Notices are added by code, not by the model.** A web answer always starts with "No company document answers this...". A fallback always starts with "I could not confirm this...".
 - **Old pages are flagged by code.** For a "now" or "latest" question, if even the newest web page is more than a week old, a "Heads up" line with its date is added. The model alone can be fooled by a page that says "updated a minute ago" (that only says when the page was saved). The search tool cannot show live status, only what pages said when they were saved.

@@ -117,6 +117,47 @@ def test_router_plays_safe_when_the_reply_to_a_follow_up_is_unreadable(fake_llm)
     assert out["query"] == out["standalone"] == "What if it keeps disconnecting?"  # it carries on as if there were no memory
 
 
+def test_router_opens_the_web_for_a_company_looking_question_when_the_person_turned_web_search_on(fake_llm):
+    fake_llm.decisions[RouteDecision] = [decision(query="MAFANG current price", public=False)]
+    out = router.route_question(state(question="what is the current price of MAFANG", web_allowed=True))
+    assert out["public"] is True
+    assert out["trace"] == ["Router → KB (search: MAFANG current price)", "Web search turned on by you"]  # the person can see why the web was used
+
+
+def test_router_leaves_a_company_only_question_off_the_web_when_web_search_is_off(fake_llm):
+    for extra in ({}, {"web_allowed": False}):
+        fake_llm.decisions[RouteDecision] = [decision(public=False)]
+        out = router.route_question(state(**extra))
+        assert out["public"] is False and "Web search turned on by you" not in out["trace"]
+
+
+def test_router_adds_no_web_note_when_the_question_was_public_anyway(fake_llm):
+    fake_llm.decisions[RouteDecision] = [decision(query="Teams outage", public=True)]
+    out = router.route_question(state(web_allowed=True))
+    assert out["public"] is True and out["trace"] == ["Router → KB (search: Teams outage)"]
+
+
+def test_router_never_searches_for_small_talk_even_with_web_search_on(fake_llm):
+    fake_llm.decisions[RouteDecision] = [decision(route="direct", public=False)]
+    out = router.route_question(state(question="Hello!", web_allowed=True))
+    assert out["route"] == "direct" and out["public"] is False and out["trace"] == ["Router → DIRECT"]
+
+
+def test_router_opens_the_web_for_a_follow_up_too(fake_llm):
+    fake_llm.decisions[FollowUpDecision] = [restated(public=False)]
+    out = router.route_question(state(question="What if it keeps disconnecting?", history=EARLIER, web_allowed=True))
+    assert out["public"] is True and out["trace"][-1] == "Web search turned on by you"
+
+
+def test_router_keeps_the_web_closed_when_its_reply_was_unreadable_even_with_web_search_on(fake_llm):
+    """An unreadable reply means the query is the question as typed, never cleaned of names and secrets, so it must not leave the network."""
+    out = router.route_question(state(question="my password is hunter2, what is the price of MAFANG", web_allowed=True))  # no decision queued
+    assert out["public"] is False and out["query"] == "my password is hunter2, what is the price of MAFANG"
+    out = router.route_question(state(question="What if it keeps disconnecting?", history=EARLIER, web_allowed=True))
+    assert out["public"] is False
+    assert "Web search turned on by you" not in out["trace"]
+
+
 # ---- retrievers --------------------------------------------------------------
 
 
@@ -434,6 +475,31 @@ def test_graph_never_searches_the_web_for_a_company_only_question(services):
     assert services.calls == {"kb": ["tidy query", "better query"], "web": []}  # one retry on the KB only
     assert "KB evidence grade → WEAK (company-only question, so no web search)" in result["trace"]
     assert not any("Web search" in line for line in result["trace"])
+
+
+def test_graph_searches_the_web_for_a_company_looking_question_when_the_person_turned_web_search_on(services):
+    """The same kind of question as above (the router says company-only), but the person turned web search on, so the web is searched."""
+    decisions(services, grades=["weak", "good"], public=False)
+    services.texts = ["MAFANG is quoted at 236.20."]
+    result = ask("what is the current price of MAFANG", web=True)
+    assert result["source_used"] == "web_search" and result["answer"].startswith(answerer.WEB_NOTICE)
+    assert services.calls == {"kb": ["tidy query"], "web": ["tidy query"]}  # the company documents are still looked at first
+    assert result["trace"] == [
+        "Router → KB (search: tidy query)",
+        "Web search turned on by you",
+        "Private KB retrieval → 1 chunks",
+        "KB evidence grade → WEAK",  # no "company-only question" note any more
+        "Web search → 2 results",
+        "Web evidence grade → GOOD",
+        "Answer generated from WEB SEARCH",
+    ]
+
+
+def test_graph_still_answers_from_the_company_documents_first_when_web_search_is_on(services):
+    decisions(services, grades=["good"], public=False)
+    services.texts = ["KB answer"]
+    result = ask("How do I connect to the VPN?", web=True)
+    assert result["source_used"] == "private_kb" and services.calls == {"kb": ["tidy query"], "web": []}  # turning it on does not skip the KB
 
 
 def test_graph_answers_a_two_topic_question_from_two_documents(services):

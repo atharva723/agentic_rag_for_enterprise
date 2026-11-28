@@ -85,7 +85,7 @@ def _invoke_with_progress(start: dict, on_step: Callable[[dict], None]) -> Agent
     return result
 
 
-def ask(question: str, history: list[dict] | None = None, on_step: Callable[[dict], None] | None = None) -> AgentState:
+def ask(question: str, history: list[dict] | None = None, on_step: Callable[[dict], None] | None = None, web: bool = False) -> AgentState:
     """Run the agent on one question and return the final state.
 
     history = the earlier exchanges of the SAME chat, oldest first: [{"question": ..., "answer": ...}]. Pass nothing for a chat's first message.
@@ -93,6 +93,9 @@ def ask(question: str, history: list[dict] | None = None, on_step: Callable[[dic
 
     on_step = optional. Called with a small dict as each step starts and finishes, so a page can show the path live (see progress.py).
     The answer is the same with or without it.
+
+    web = True when the person turned web search on for this question. The company documents are still searched first, but the web may
+    then be used even for a question the router judged company-only (see route_question). The search text is still the router's cleaned one.
 
     result["tokens"] says how many LLM tokens each model used for this question. It is also logged, so you can watch the free budget.
     """
@@ -102,6 +105,7 @@ def ask(question: str, history: list[dict] | None = None, on_step: Callable[[dic
         "query": question,
         "also": "",
         "public": False,
+        "web_allowed": web,
         "retries": 0,
         "docs": [],
         "citations": [],

@@ -36,7 +36,8 @@ Question
                  yes -> search the web (Tavily) -> grade again
                           good -> answer from the web (with a notice that it is not from company documents)
                           weak -> rewrite the question once and try the KB again
-                 no  -> (passwords, tickets, people, equipment: the web is never searched)
+                 no  -> (passwords, tickets, people, equipment: the web is not searched,
+                         unless you turned on Web search for this question)
                         rewrite the question once and try the KB again
                still weak -> fallback answer that says what it could not confirm
 ```
@@ -44,6 +45,11 @@ Question
 **Follow-ups.** The agent keeps nothing between questions. For a saved chat, the server loads the chat's last few question-and-answer pairs from the database and hands them to the agent with the new question (`MEMORY_TURNS`, 3 by default). The router uses them only to restate a follow-up as a complete question ("what if it keeps dropping?" becomes "what should I do if the VPN keeps dropping?"), and every later step works on that. Evidence is always searched fresh.
 
 **Live steps.** The chat page does not wait in silence. While the agent works, it shows each step as it happens ("Searching the company documents…", then "Not enough in the company documents, searching the public web…"). When the answer is ready, the steps fold into one line above the answer ("Searched company documents · 4 steps · 6.3s ›") that opens to the full decision path. The page calls `POST /api/conversations/{id}/messages/stream`, and the server sends each step down the open connection as it happens (Server-Sent Events: one-way live updates over a normal web connection). How the agent reports its steps is in `app/agent/README.md`.
+
+**Web search button.** The chat box has a **Web search** button, off by default. Without it, the router alone decides whether the web may be used, and it keeps company-only questions (passwords, tickets, people, equipment) away from the web. Some public questions look company-only to it, for example the price of a fund. Turn the button on and the web may be used for your question anyway.
+- The company documents are still searched first, and the web is used only if they fall short.
+- The router still cleans the search text (no names, emails or secrets), and the answer says it comes from the web.
+- The step list shows "Web search turned on by you" when the button made the difference.
 
 ## Words used in this repo
 
@@ -127,10 +133,12 @@ docker run --env-file .env -p 8000:8000 it-support-copilot
 - `PyTorch >= 2.6 is required but found 2.5.0`, then `NameError: name 'nn' is not defined`: the embedding library found an old PyTorch. Usually the environment is empty or shares packages with another project. Check which Python runs with `python -c "import sys; print(sys.executable)"` (it must be inside your env), then run `pip install -r requirements.txt` again.
 - Chat says "The AI service is busy or its daily limit is used up": Groq's free limit was reached (8,000 tokens a minute and 200,000 a day, per model). Wait a minute for the per-minute limit. For the daily limit, wait until tomorrow, or point the busy model's setting (`GROQ_MODEL` or `GROQ_FAST_MODEL` in `.env`) at the other `openai/gpt-oss-*` model, which has its own budget. Only those two models give the strict JSON replies the decisions need. See `app/agent/README.md`.
 - Every answer comes from the web, or says it could not confirm anything: the KB is empty or ingest and chat use different index names. Run `python -m app.rag.store` to see how many chunks are stored.
+- A question about something public (a share price, a product) ends with "I could not confirm this from the company documents", and its steps say "company-only question, so no web search": the router took it for a company question. Turn on **Web search** in the chat box and ask again.
 
 ## Where do I change...?
 
 - the flow or the retry rules: `app/agent/graph.py`
+- when the web may be used: what counts as a public question is the router's wording in `app/agent/prompts.py`. What the Web search button changes is in `app/agent/nodes/router.py`. The button itself is in `ui/chat.html` and `ui/app.js`
 - what the LLM is told: `app/agent/prompts.py`
 - what one step does: its file in `app/agent/nodes/`
 - the wording of the live status lines ("Searching the company documents…"): `app/agent/progress.py`. How they travel to the page: `app/api/streaming.py` (server) and `stream()` in `ui/common.js` (page)
@@ -171,6 +179,7 @@ All the MVP parts work: settings, the knowledge base (`app/rag/`), web search (`
 ### How some things work
 
 - Chats are saved on the server, one list per user, so they follow a person to another browser or computer.
+- The Web search button is a choice for each question. The page sends it as `"web": true` with the question, and the server remembers nothing about it. The page remembers the button in the browser (not per account), and it starts off in a new browser.
 - Follow-ups work because the server loads the chat's earlier questions and answers from the database with each new question, so they survive a new sign-in, another browser and a restart. The agent reads only the last `MEMORY_TURNS` of them, cut short. A new chat starts fresh. A follow-up that changes topic is searched as a new question.
 - Pages are served with a strict Content-Security-Policy (our own files, Google Fonts and the Supabase project only), plus `nosniff`, no-referrer and anti-framing headers (`app/headers.py`). Inline `style="..."` attributes are allowed because the landing, Vault and Settings pages use a few. There is no HSTS header: that belongs on the HTTPS proxy you put in front.
 - The audit log keeps every question as typed. For a question asked in a saved chat it also records who asked (the user id) and in which chat. Rows older than `AUDIT_RETENTION_DAYS` (90 days by default) are deleted when the server starts and each time a question is saved. Deleting a chat does not delete its audit rows: they expire with the rest. Treat the file as private.

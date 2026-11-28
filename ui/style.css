@@ -414,6 +414,7 @@ body.hide-trace .activity:not(.live), body.hide-trace .live .step-done { display
   width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--outline); transition: all 0.15s;
 }
 .dock-input .attach:hover { color: var(--on-surface); background: var(--surface); }
+.dock-input .chip { flex-shrink: 0; padding: 5px 9px; white-space: nowrap; }
 .dock .send-btn { box-shadow: 1.5px 1.5px 0 var(--ink); }
 .dock-hints { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 8px 0; font: 400 11px var(--font-mono); color: var(--outline); }
 
@@ -665,7 +666,7 @@ table.audit details ol { margin: 6px 0 0; padding-left: 18px; color: var(--on-va
   .greeting h1 { font-size: 30px; }
   .suggestions, .source-grid { grid-template-columns: 1fr; }
   .sticker-bulb { display: none; }
-  .composer-bar .chip span:not(.ms) { display: none; }
+  .composer-bar .chip span:not(.ms), .dock-input .chip span:not(.ms) { display: none; }
   .thread-inner { padding: 20px 14px; }
   .thread-head .right img { display: none; }
   .auth-main { padding: 24px 12px 48px; }

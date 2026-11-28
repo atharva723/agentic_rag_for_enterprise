@@ -49,6 +49,7 @@ class AgentState(TypedDict):
     query: str  # what we search with (changes when the question is rewritten)
     also: str  # a second search for a second topic in the question ("" if there is only one)
     public: bool  # can public web pages answer this? False means it needs company information, so the web is never searched
+    web_allowed: bool  # the person turned web search on for this question. Set by ask(), read only by the router, which then opens the web (public)
     route: Route
     docs: list[Document]  # current evidence, from the KB or the web
     grade: Grade  # is the current evidence good enough?

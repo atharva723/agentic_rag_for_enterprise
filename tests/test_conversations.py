@@ -134,6 +134,7 @@ class Agent:
 
     def __init__(self):
         self.calls = []
+        self.web_flags = []  # for each call: did the person turn web search on?
         self.steps = [
             {"step": "route_question", "status": "start", "label": "Understanding your question…"},
             {"step": "route_question", "status": "done", "lines": ["Router → KB"]},
@@ -141,8 +142,9 @@ class Agent:
             {"step": "generate_answer", "status": "done", "lines": ["Answer generated from PRIVATE KB"]},
         ]
 
-    def __call__(self, question, history, on_step=None):
+    def __call__(self, question, history, on_step=None, web=False):
         self.calls.append((question, history))
+        self.web_flags.append(web)
         for event in self.steps if on_step else []:
             on_step(event)
         return {
@@ -365,6 +367,30 @@ def test_a_question_is_only_a_question_between_2_and_3000_characters(agent):
     chat_id = new_chat()
     for question in ("?", "x" * 3001):
         assert say(chat_id, question).status_code == 422
+    assert agent.calls == []
+
+
+def test_web_search_is_off_unless_the_page_turns_it_on(agent):
+    chat_id = new_chat()
+    say(chat_id, "What is the price of MAFANG?")  # the page says nothing
+    say(chat_id, "And the price of NVDA?", web=False)
+    assert agent.web_flags == [False, False]
+
+
+def test_the_web_search_switch_of_the_page_reaches_the_agent_on_both_routes(agent):
+    chat_id = new_chat()
+    assert say(chat_id, "What is the price of MAFANG?", web=True).status_code == 200
+    streamed = stream(chat_id, "And the price of NVDA?", web=True)
+    assert parse_events(streamed.text)[-1][0] == "answer"
+    assert agent.web_flags == [True, True]
+    say(chat_id, "A question with the switch off again")
+    assert agent.web_flags[-1] is False  # it is the page's choice for each question, never remembered by the server
+
+
+def test_a_web_search_switch_that_is_not_true_or_false_is_refused_before_anything_runs(agent):
+    chat_id = new_chat()
+    assert say(chat_id, "What is the price of MAFANG?", web="maybe").status_code == 422
+    assert stream(chat_id, "What is the price of MAFANG?", web="maybe").status_code == 422
     assert agent.calls == []
 
 
@@ -623,9 +649,9 @@ def test_every_chat_route_counts_towards_the_request_limit(method, url, body, ag
 # ---- streaming: the same question, with the steps shown as they happen -------------------------------------------------------
 
 
-def stream(chat_id, question, name="ana"):
+def stream(chat_id, question, name="ana", **extra):
     as_(name)
-    return web.post(f"/api/conversations/{chat_id}/messages/stream", json={"question": question})
+    return web.post(f"/api/conversations/{chat_id}/messages/stream", json={"question": question, **extra})
 
 
 def test_the_stream_sends_each_step_as_it_happens_and_then_the_answer(agent):

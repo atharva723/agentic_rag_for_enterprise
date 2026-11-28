@@ -35,9 +35,11 @@ class Rename(BaseModel):
 
 
 class MessageRequest(BaseModel):
-    """Only the question. The earlier messages come from the database, never from the request, so nobody can invent a chat history."""
+    """The question, and whether the person turned web search on for it. The earlier messages come from the database, never from the
+    request, so nobody can invent a chat history."""
 
     question: str = Field(min_length=2, max_length=3000)
+    web: bool = False  # web search turned on in the chat page: the web may be used even for a question that looks company-only
 
 
 def failure(exc: ChatStoreError) -> HTTPException:
@@ -115,12 +117,13 @@ def open_chat(user: User, chat_id: UUID) -> tuple[str, dict | None, list[str]]:
     return chat_key, chat, warnings
 
 
-def answer_in_chat(user: User, chat_key: str, chat: dict | None, warnings: list[str], question: str, on_step=None) -> dict:
+def answer_in_chat(user: User, chat_key: str, chat: dict | None, warnings: list[str], question: str, on_step=None, web: bool = False) -> dict:
     """Run the agent on the question, then audit and save the exchange. on_step hears about each step of the agent as it happens.
-    Raises a 429 HTTPException when the AI service is busy. Returns what the page needs (see send_message)."""
+    web = the person turned web search on for this question. Raises a 429 HTTPException when the AI service is busy.
+    Returns what the page needs (see send_message)."""
     started = time.perf_counter()
     try:
-        result = run_agent(question, chats.history_from(chat["messages"]) if chat else [], on_step)
+        result = run_agent(question, chats.history_from(chat["messages"]) if chat else [], on_step, web)
     except HTTPException:  # the AI service is busy (run_agent's only HTTP error): not the person's doing, so it does not count against them
         refund_question(user)
         raise
@@ -158,10 +161,13 @@ def send_message(chat_id: UUID, req: MessageRequest, user: User = Depends(allow_
     Each person may ask only so many questions a minute and a day (429 and a Retry-After header after that, checked before anything
     else runs). A question the AI service was too busy to answer does not count.
 
+    The body may also say "web": true. That is the person's Web search button: the web may then be used even for a question the router
+    judged company-only. It is for this question only, and the server does not remember it.
+
     If the chat cannot be read (a Supabase problem), the question is still answered, on its own, with a warning. If the answer
     cannot be saved, it is still returned, with saved=false and a warning."""
     chat_key, chat, warnings = open_chat(user, chat_id)
-    return answer_in_chat(user, chat_key, chat, warnings, req.question)
+    return answer_in_chat(user, chat_key, chat, warnings, req.question, web=req.web)
 
 
 @router.post("/{chat_id}/messages/stream")
@@ -178,4 +184,4 @@ async def stream_message(chat_id: UUID, req: MessageRequest, user: User = Depend
     A chat that is not yours, a missing sign-in and a limit that is used up are still plain HTTP answers (404, 401, 429), sent before
     anything is streamed. The job runs in its own thread, so a page that closes mid-answer does not stop it: the answer is still saved."""
     chat_key, chat, warnings = await run_in_threadpool(open_chat, user, chat_id)  # blocking database calls: not on the event loop
-    return stream(lambda emit: answer_in_chat(user, chat_key, chat, warnings, req.question, lambda event: emit("step", event)))
+    return stream(lambda emit: answer_in_chat(user, chat_key, chat, warnings, req.question, lambda event: emit("step", event), req.web))

@@ -95,6 +95,9 @@
             <div class="composer-bar">
               <div class="chips">
                 <a class="chip" href="vault.html" title="Add documents to the knowledge base"><span class="ms ms-sm" aria-hidden="true">attach_file</span><span>Add docs</span></a>
+                <button class="chip web-toggle" type="button" aria-pressed="false" aria-label="Web search" title="Let the assistant use the public web when the company documents do not have the answer. Only a cleaned-up search phrase leaves the network.">
+                  <span class="ms ms-sm" aria-hidden="true">language</span><span>Web search</span>
+                </button>
                 <button class="chip" id="trace-toggle" type="button" aria-pressed="true" title="Show or hide the steps the AI took, above each answer">
                   <span class="ms ms-sm" aria-hidden="true">tune</span><span>Decision Path</span>
                 </button>
@@ -145,6 +148,9 @@
           <div class="dock-inner">
             <form class="dock-input" id="follow-up" autocomplete="off">
               <a class="attach" href="vault.html" aria-label="Add documents to the knowledge base"><span class="ms" aria-hidden="true">attach_file</span></a>
+              <button class="chip web-toggle" type="button" aria-pressed="false" aria-label="Web search" title="Let the assistant use the public web when the company documents do not have the answer. Only a cleaned-up search phrase leaves the network.">
+                <span class="ms ms-sm" aria-hidden="true">language</span><span>Web search</span>
+              </button>
               <label for="follow-up-input" class="sr-only">Ask another question</label>
               <input id="follow-up-input" type="text" minlength="2" maxlength="3000" required placeholder="Ask another question in this thread...">
               <button class="send-btn" id="send" type="submit"><span>Send</span><span class="ms ms-sm" aria-hidden="true">arrow_upward</span></button>

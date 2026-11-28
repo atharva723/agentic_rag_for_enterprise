@@ -32,6 +32,7 @@ What the pages do:
   - If the question fails part-way, the line says "Stopped after N steps" and the steps that did run are listed. If the person is over their question limit, the answer card shows the server's plain message ("You are asking too fast. The limit is 5 questions a minute. Please wait 29 seconds and ask again."), and nothing is saved.
   - The "Decision Path" chip hides these lines: it hides the finished steps while a question runs (the running step stays) and the summary line after it.
   - Web sources are links. Company documents show their title and file name.
+  - The **Web search** button (a globe) sits in the new-chat box and in the follow-up bar. They are one setting, off at first. Turn it on and each question is sent with `web: true`, so the web may be used even for a question the router thinks is company-only. The step list then says "Web search turned on by you". The choice is remembered in this browser. On a phone the button shows only its icon.
 - **Saved chats** live on the server for the signed-in person, so they follow them to any browser.
   - The list comes from `GET /api/conversations`, a chat's messages are fetched when it is opened, and a question goes to `POST /api/conversations/{id}/messages/stream` (the live version of `.../messages`, see `app/api/README.md`).
   - The page sends only the question: the server loads the chat's earlier messages itself, so a follow-up works and nobody can invent a history. The first question of a new chat creates the chat, and the server names it.
